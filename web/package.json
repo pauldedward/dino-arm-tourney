@@ -1,0 +1,57 @@
+{
+  "name": "dino-arm-tourney-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
+    "dev:warm": "next dev -p 3000",
+    "dev:fresh": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true});require('fs').rmSync('node_modules/.cache',{recursive:true,force:true})\" && next dev -p 3000",
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true});require('fs').rmSync('node_modules/.cache',{recursive:true,force:true})\"",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "preview": "npm run build && npm run start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "seed:sample": "node --env-file=.env.local scripts/seed-sample.mjs",
+    "seed:reset": "node --env-file=.env.local scripts/seed-sample.mjs --reset",
+    "seed:bulk": "node --import tsx --env-file=.env.local scripts/seed-bulk.ts",
+    "seed:bulk:reset": "node --import tsx --env-file=.env.local scripts/seed-bulk.ts --reset",
+    "users:reset": "node --env-file=.env.local scripts/drop-all-users.mjs",
+    "cache:photos": "node --env-file=.env.local scripts/cache-photos.mjs",
+    "rehearsal": "node --import tsx --env-file=.env.local scripts/dress-rehearsal.ts",
+    "populate:event": "node --import tsx --env-file=.env.local scripts/populate-event.ts",
+    "smoke:dashboard": "node --env-file=.env.local scripts/smoke-dashboard.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "@react-pdf/renderer": "^4.1.5",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.49.4",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "next": "^16.2.4",
+    "qrcode": "^1.5.4",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "canvas": "^3.2.3",
+    "fake-indexeddb": "^6.2.5",
+    "pdfjs-dist": "^4.10.38",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "uuid": "^14.0.0"
+  }
+}

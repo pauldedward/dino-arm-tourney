@@ -1,0 +1,34 @@
+[
+  {
+    "id": "10000000-0000-0000-0000-000000000001",
+    "email": "superadmin@dino.local",
+    "password": "Dino@2026!",
+    "full_name": "Kevin S",
+    "role": "super_admin",
+    "phone": "+919999900001"
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000002",
+    "email": "operator1@dino.local",
+    "password": "Dino@2026!",
+    "full_name": "Operator One",
+    "role": "operator",
+    "phone": "+919999900002"
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000003",
+    "email": "operator2@dino.local",
+    "password": "Dino@2026!",
+    "full_name": "Operator Two",
+    "role": "operator",
+    "phone": "+919999900003"
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000004",
+    "email": "weighin@dino.local",
+    "password": "Dino@2026!",
+    "full_name": "Weigh-in Official",
+    "role": "weigh_in_official",
+    "phone": "+919999900004"
+  }
+]

@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: "Times New Roman", "Editorial New", ui-serif, Georgia, serif;
+    --font-body: "Helvetica Neue", "Inter Tight", ui-sans-serif, system-ui;
+  }
+
+  html, body {
+    background: theme(colors.bone);
+    color: theme(colors.ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: theme(colors.blood); color: theme(colors.bone); }
+}
+
+/* hard rules */
+.hr-hard { border: 0; border-top: 2px solid theme(colors.ink); }
+.hr-bone { border: 0; border-top: 1px solid rgba(11,11,12,.15); }
+
+/* tabular numerals for chest numbers / counters */
+.tnum { font-variant-numeric: tabular-nums; }

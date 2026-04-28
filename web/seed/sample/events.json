@@ -1,0 +1,60 @@
+{
+  "_comment": "Sample events for dev/demo. Idempotent seeding: stable UUIDs with 20000000-0000-0000-0000-… prefix so seed:reset can wipe them cleanly.",
+  "organization": {
+    "id": "20000000-0000-0000-0000-000000000000",
+    "slug": "tnawa",
+    "name": "Tamil Nadu Arm Wrestling Association",
+    "kind": "federation",
+    "country": "IN",
+    "region": "Tamil Nadu"
+  },
+  "events": [
+    {
+      "id": "20000000-0000-0000-0000-000000000001",
+      "slug": "tn-state-2026",
+      "name": "TN State Arm Wrestling Championship 2026",
+      "status": "open",
+      "starts_at": "2026-05-17T03:30:00Z",
+      "ends_at": "2026-05-17T14:00:00Z",
+      "venue_name": "Nehru Indoor Stadium",
+      "venue_city": "Chennai",
+      "venue_state": "Tamil Nadu",
+      "hand": "both",
+      "entry_fee_default_inr": 500,
+      "upi_id": "tnawa@okhdfc",
+      "upi_payee_name": "Tamil Nadu Arm Wrestling Association",
+      "payment_provider": "manual_upi",
+      "primary_color": "#0f3d2e",
+      "accent_color": "#f5c518",
+      "text_on_primary": "#ffffff",
+      "id_card_org_name": "Tamil Nadu Arm Wrestling Association",
+      "id_card_event_title": "TN State Championship 2026",
+      "id_card_subtitle": "Chennai · 17 May 2026",
+      "id_card_footer": "Registered with PAFI · Affiliated to WAF",
+      "id_card_signatory_name": "V. Ramamurthy",
+      "id_card_signatory_title": "General Secretary",
+      "registration_published_at": "2026-04-01T00:00:00Z"
+    },
+    {
+      "id": "20000000-0000-0000-0000-000000000002",
+      "slug": "demo-archived-2025",
+      "name": "TN District Qualifier — Coimbatore (Demo)",
+      "status": "archived",
+      "starts_at": "2025-11-09T03:30:00Z",
+      "ends_at": "2025-11-09T12:00:00Z",
+      "venue_name": "CODISSIA Trade Fair Complex",
+      "venue_city": "Coimbatore",
+      "venue_state": "Tamil Nadu",
+      "hand": "both",
+      "entry_fee_default_inr": 300,
+      "primary_color": "#5a1d1d",
+      "accent_color": "#e4b363",
+      "id_card_org_name": "TNAWA · Coimbatore District",
+      "id_card_event_title": "Coimbatore District Qualifier 2025",
+      "id_card_subtitle": "9 November 2025",
+      "id_card_footer": "Archived event — retained for reference",
+      "registration_published_at": "2025-10-01T00:00:00Z",
+      "registration_closed_at": "2025-11-06T00:00:00Z"
+    }
+  ]
+}

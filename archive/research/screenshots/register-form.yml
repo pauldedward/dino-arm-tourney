@@ -1,0 +1,88 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - img "TN Arm Wrestling Association Logo" [ref=e5]
+      - heading "THE TAMIL NADU ARM WRESTLING ASSOCIATION" [level=1] [ref=e7]
+    - generic [ref=e8]:
+      - button "HOME" [ref=e9] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e13]: HOME
+      - button "Post Processing" [ref=e29] [cursor=pointer]:
+        - img [ref=e30]
+        - generic [ref=e33]: Post Processing
+      - button [active] [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+  - alert [ref=e27]
+  - complementary [ref=e120]:
+    - generic [ref=e121]:
+      - img [ref=e123]
+      - generic [ref=e124]:
+        - paragraph [ref=e125]: _kevin.s_
+        - paragraph [ref=e126]: International Referee
+        - paragraph [ref=e127]: The Tamil Nadu Arm Wrestling Association
+      - button "Logout" [ref=e129] [cursor=pointer]:
+        - img [ref=e130]
+        - text: Logout
+      - button "✕" [ref=e133] [cursor=pointer]
+      - button "ℹ️ About" [ref=e136] [cursor=pointer]:
+        - generic [ref=e137]: ℹ️
+        - text: About
+  - main [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - heading "Test Event" [level=1] [ref=e63]
+          - button "Edit Event" [ref=e64] [cursor=pointer]
+        - generic [ref=e65]:
+          - textbox "Initial" [ref=e66]
+          - generic [ref=e67]: .
+          - textbox "Athlete Full Name" [ref=e68]
+        - generic [ref=e69]:
+          - generic [ref=e70] [cursor=pointer]:
+            - radio "Team" [ref=e71]
+            - text: Team
+          - generic [ref=e72] [cursor=pointer]:
+            - radio "District" [checked] [ref=e73]
+            - text: District
+        - generic [ref=e74]:
+          - combobox "Select District" [ref=e75]
+          - textbox "DD/MM/YYYY" [ref=e76]
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - textbox [disabled] [ref=e79]: "+91"
+            - textbox "Mobile Number" [ref=e80]
+          - 'textbox "Adhaar Number : XXXX XXXX XXXX" [ref=e81]'
+        - generic [ref=e82]:
+          - button "Men" [ref=e83] [cursor=pointer]
+          - button "Women" [ref=e84] [cursor=pointer]
+        - generic [ref=e85]:
+          - button "Sub Junior" [ref=e86] [cursor=pointer]
+          - button "Junior" [ref=e87] [cursor=pointer]
+          - button "Youth" [ref=e88] [cursor=pointer]
+          - button "Senior" [ref=e89] [cursor=pointer]
+          - button "Master" [ref=e90] [cursor=pointer]
+          - button "Grand Master" [ref=e91] [cursor=pointer]
+          - button "Senior Grand Master" [ref=e92] [cursor=pointer]
+          - button "Super Senior Grand Master" [ref=e93] [cursor=pointer]
+        - generic [ref=e94]:
+          - textbox "Weight" [ref=e96]
+          - button "Add Photo" [ref=e99] [cursor=pointer]
+        - generic [ref=e100]:
+          - textbox "Amount Paid" [ref=e101]
+          - textbox "Amount Pending" [ref=e102]
+        - button "+ Add Player" [ref=e103] [cursor=pointer]
+      - complementary [ref=e104]:
+        - generic [ref=e105]:
+          - heading "Registered Players" [level=2] [ref=e106]
+          - generic [ref=e107]:
+            - button "Refresh" [ref=e108] [cursor=pointer]
+            - button "🗑 Clear All" [ref=e109] [cursor=pointer]
+        - textbox "Search athlete..." [ref=e110]
+        - list [ref=e111]:
+          - listitem [ref=e112] [cursor=pointer]:
+            - 'generic "#1001 — M. PRASANTH Event: TN STATE CHAMPIONSHIP - 2026 DOB: 29/04/2005 Gender: Men Mobile: 6381703897 Weight: 70 Aadhaar:" [ref=e113]':
+              - generic [ref=e114]: 1. M. PRASANTH
+              - generic [ref=e115]: 1001 • CHENNAI
+            - generic [ref=e116]:
+              - button "Edit" [ref=e117]
+              - button "🗑" [ref=e118]

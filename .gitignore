@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build
+.next/
+out/
+build/
+dist/
+
+# Env files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# Caches
+.cache/
+.turbo/
+.eslintcache
+.next/
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local data / PII (registrations, exports)
+*.xlsx
+*.xls
+*.zip
+non para/
+research/populate-out/
+research/rehearsal-out/
+
+# Ad-hoc screenshots / scratch files at repo root
+/*.png
+/edit-resp.html
+
+# Memory / scratch
+.copilot/

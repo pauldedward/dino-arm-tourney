@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+# Secrets: only .local variants are gitignored. .env / .env.development / .env.production are committed (non-secret defaults).
+.env.local
+.env.*.local
+public/cached
+*.log
+.DS_Store

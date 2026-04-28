@@ -21,6 +21,7 @@ const PATCHABLE = new Set([
   "description",
   // Payment
   "entry_fee_default_inr",
+  "entry_fee_offline_inr",
   "upi_id",
   "upi_payee_name",
   "payment_mode",
@@ -58,7 +59,25 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {
-    if (PATCHABLE.has(k)) patch[k] = v;
+    if (!PATCHABLE.has(k)) continue;
+    // Coerce empty/invalid offline-fee inputs to null so the form's blank
+    // input means "no override" and not "₹0".
+    if (k === "entry_fee_offline_inr") {
+      if (v === "" || v == null) {
+        patch[k] = null;
+        continue;
+      }
+      const n = typeof v === "number" ? v : Number(v);
+      if (!Number.isFinite(n) || n < 0) {
+        return NextResponse.json(
+          { error: "entry_fee_offline_inr must be a non-negative integer or blank" },
+          { status: 400 }
+        );
+      }
+      patch[k] = Math.round(n);
+      continue;
+    }
+    patch[k] = v;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no patchable fields" }, { status: 400 });

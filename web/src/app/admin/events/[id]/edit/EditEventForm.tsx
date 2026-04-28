@@ -205,6 +205,11 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
     (event.payment_mode as "online_upi" | "offline" | "hybrid" | null) ?? "online_upi"
   );
   const [fee, setFee] = useState(String(event.entry_fee_default_inr ?? 500));
+  // Optional override charged when the operator collects offline (cash /
+  // counter-desk UPI). Empty string = no override (use the online fee).
+  const [offlineFee, setOfflineFee] = useState(
+    event.entry_fee_offline_inr == null ? "" : String(event.entry_fee_offline_inr)
+  );
   const [upiId, setUpiId] = useState(event.upi_id ?? "");
   const [upiPayee, setUpiPayee] = useState(event.upi_payee_name ?? "");
   const [busy, setBusy] = useState(false);
@@ -218,6 +223,8 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
       await patchEvent(event.id, {
         payment_mode: mode,
         entry_fee_default_inr: Number(fee) || 0,
+        entry_fee_offline_inr:
+          offlineFee.trim() === "" ? null : Number(offlineFee) || 0,
         upi_id: mode === "offline" ? null : upiId || null,
         upi_payee_name: mode === "offline" ? null : upiPayee || null,
       });
@@ -265,6 +272,21 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
       >
         <input type="number" min={0} value={fee} onChange={(e) => setFee(e.target.value)} className="input" />
       </Field>
+      {mode !== "online_upi" && (
+        <Field
+          label="Offline entry fee per hand (₹)"
+          hint="Charged when an operator collects cash / desk-UPI. Leave blank to use the same fee as online."
+        >
+          <input
+            type="number"
+            min={0}
+            value={offlineFee}
+            onChange={(e) => setOfflineFee(e.target.value)}
+            className="input"
+            placeholder={`Same as online (₹${Number(fee) || 0})`}
+          />
+        </Field>
+      )}
       <p className="font-mono text-xs text-ink/60">
         Concessions for juniors / Para / women / multi-class athletes are
         reviewed manually. The athlete sees this default and is told to refer

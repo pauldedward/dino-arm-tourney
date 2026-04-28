@@ -34,6 +34,9 @@ export default function PreviewToolbar({
       if (v) next.set(k, v);
       else next.delete(k);
     }
+    // Filter changes always invalidate the current page — jump back to
+    // page 1 so the operator never sees an "empty page 4" after a search.
+    next.delete("page");
     start(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   }
 

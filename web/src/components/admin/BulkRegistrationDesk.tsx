@@ -13,6 +13,12 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import Spinner from "@/components/Spinner";
 import { loadPendingRows, savePendingRows } from "./bulkPendingStore";
 
+// Feature flag — counter desk currently doesn't ask the operator for a UTR or
+// payment-proof image (offline cash/UPI is taken on trust at the counter).
+// Flip to `true` to re-enable the UTR field, the proof-capture block, and
+// the "no UTR/proof needed" hint without touching any other code path.
+const SHOW_UPI_PROOF_UI = false;
+
 export interface SavedRow {
   id: string;
   full_name: string | null;
@@ -81,6 +87,10 @@ interface Draft {
   payment_method: "manual_upi" | "cash";
   payment_utr: string;
 
+  /** Whether this row is online (athlete pre-registered) or offline
+   *  (walk-in at the counter). Drives which event fee is the default. */
+  channel: "online" | "offline";
+
   approve_weighin: boolean;
 
   photo_key: string | null;
@@ -94,7 +104,8 @@ interface Draft {
 
 function emptyDraft(
   defaultFee: number,
-  defaultMethod: "manual_upi" | "cash" = "manual_upi"
+  defaultMethod: "manual_upi" | "cash" = "manual_upi",
+  channel: "online" | "offline" = "offline"
 ): Draft {
   return {
     full_name: "",
@@ -122,6 +133,7 @@ function emptyDraft(
     total_touched: false,
     payment_method: defaultMethod,
     payment_utr: "",
+    channel,
     approve_weighin: false,
     photo_key: null,
     photo_preview: null,
@@ -150,13 +162,17 @@ export default function BulkRegistrationDesk({
   eventId,
   eventStartsAt,
   defaultFee,
+  offlineFee,
   paymentMode = "online_upi",
   districts,
   initialSaved,
 }: {
   eventId: string;
   eventStartsAt: string;
+  /** Per-hand fee for online registrations (event.entry_fee_default_inr). */
   defaultFee: number;
+  /** Per-hand fee for offline registrations. Falls back to defaultFee. */
+  offlineFee?: number;
   paymentMode?: "online_upi" | "offline" | "hybrid";
   districts: readonly string[];
   initialSaved: SavedRow[];
@@ -164,8 +180,9 @@ export default function BulkRegistrationDesk({
   const confirm = useConfirm();
   const defaultMethod: "manual_upi" | "cash" =
     paymentMode === "offline" ? "cash" : "manual_upi";
+  const effectiveOfflineFee = offlineFee ?? defaultFee;
   const [draft, setDraft] = useState<Draft>(() =>
-    emptyDraft(defaultFee, defaultMethod)
+    emptyDraft(effectiveOfflineFee, defaultMethod, "offline")
   );
   const [error, setError] = useState<string | null>(null);
   // Hydrate from localStorage so a refresh during a flaky-network event
@@ -198,9 +215,9 @@ export default function BulkRegistrationDesk({
   // mobile / district / team. Status chips stack on top. Session rows
   // added during this mount stay pinned at the top regardless of filter.
   const [query, setQuery] = useState("");
-  const [payFilter, setPayFilter] = useState<"" | "paid" | "partial" | "due">("");
+  const [payFilter, setPayFilter] = useState<"" | "paid" | "non-paid">("");
   const [checkinFilter, setCheckinFilter] = useState<
-    "" | "weighed-in" | "no-show" | "not-arrived"
+    "" | "weighed-in" | "not-weighed-in"
   >("");
   const [searching, setSearching] = useState(false);
   const [eventTotal, setEventTotal] = useState<number | null>(null);
@@ -377,9 +394,10 @@ export default function BulkRegistrationDesk({
     draft.para_hand,
   ]);
 
-  // Suggested total = entries × per-hand fee. The operator can override
-  // it (lower it) — the diff becomes an implicit waiver, captured below.
-  const suggestedTotal = Math.max(entryCount, 1) * defaultFee;
+  // Suggested total = entries × per-hand fee for the selected channel.
+  // Online and offline registrations may use different per-hand rates.
+  const perHandFee = draft.channel === "online" ? defaultFee : effectiveOfflineFee;
+  const suggestedTotal = Math.max(entryCount, 1) * perHandFee;
   const totalFee = Math.max(0, Number(draft.total_fee_inr) || 0);
   const paidNum = Number(draft.paid_amount_inr) || 0;
   const pendingFee = Math.max(0, totalFee - paidNum);
@@ -663,6 +681,7 @@ export default function BulkRegistrationDesk({
             ? p.payment_method
             : defaultMethod,
         payment_utr: (p.payment_utr as string) ?? "",
+        channel: p.channel === "online" ? "online" : "offline",
         approve_weighin: Boolean(p.approve_weighin),
         photo_key: (p.photo_key as string) ?? null,
         photo_preview: null,
@@ -688,10 +707,10 @@ export default function BulkRegistrationDesk({
   const cancelEdit = useCallback(() => {
     setEditingClientId(null);
     newDraftId();
-    setDraft(emptyDraft(defaultFee, defaultMethod));
+    setDraft(emptyDraft(effectiveOfflineFee, defaultMethod, "offline"));
     setError(null);
     setTimeout(() => nameInputRef.current?.focus(), 0);
-  }, [defaultFee, defaultMethod, newDraftId]);
+  }, [effectiveOfflineFee, defaultMethod, newDraftId]);
 
   // ── Delete a row ────────────────────────────────────────────────────
   const deleteRow = useCallback(
@@ -702,7 +721,7 @@ export default function BulkRegistrationDesk({
       setSaved((rs) => rs.filter((r) => r.client_id !== clientId));
       if (editingClientId === clientId) {
         setEditingClientId(null);
-        setDraft(emptyDraft(defaultFee, defaultMethod));
+        setDraft(emptyDraft(effectiveOfflineFee, defaultMethod, "offline"));
       }
       // Server-persisted rows need a DELETE call. status === "saved"
       // means the server round-trip completed (or the row came in via
@@ -734,8 +753,8 @@ export default function BulkRegistrationDesk({
     if (!dob) return setError("date of birth required (DD MM YYYY)");
     if (!draft.gender) return setError("gender required");
     if (!/^\d{10}$/.test(draft.mobile)) return setError("mobile must be 10 digits");
-    if (draft.aadhaar && !/^\d{12}$/.test(draft.aadhaar)) {
-      return setError("aadhaar must be 12 digits (or leave blank)");
+    if (!/^\d{12}$/.test(draft.aadhaar)) {
+      return setError("aadhaar must be 12 digits");
     }
     const weight = Number(draft.declared_weight_kg);
     if (!Number.isFinite(weight) || weight < 20 || weight > 250) {
@@ -819,6 +838,7 @@ export default function BulkRegistrationDesk({
       payment_utr: draft.payment_method === "manual_upi" ? draft.payment_utr.trim() || undefined : undefined,
       payment_proof_key: draft.payment_method === "manual_upi" ? draft.proof_key ?? undefined : undefined,
       approve_weighin: draft.approve_weighin,
+      channel: draft.channel,
     };
 
     // Optimistic row — appears in the right rail instantly.
@@ -880,7 +900,7 @@ export default function BulkRegistrationDesk({
 
     // Reset for next athlete — keep affiliation + district/team + fee
     // sticky (operators usually run one district at a time).
-    const fresh = emptyDraft(defaultFee, defaultMethod);
+    const fresh = emptyDraft(effectiveOfflineFee, defaultMethod, draft.channel);
     fresh.affiliation_kind = draft.affiliation_kind;
     fresh.district = draft.district;
     fresh.team = draft.team;
@@ -888,7 +908,7 @@ export default function BulkRegistrationDesk({
     fresh.payment_method = draft.payment_method;
     setDraft(fresh);
     setTimeout(() => nameInputRef.current?.focus(), 0);
-  }, [defaultFee, defaultMethod, derivedPaymentStatus, districts, dob, draft, editingClientId, eventId, eventStartsAt, newDraftId, submitRow]);
+  }, [effectiveOfflineFee, defaultMethod, derivedPaymentStatus, districts, dob, draft, editingClientId, eventId, eventStartsAt, newDraftId, submitRow]);
 
   // Keep latest saved list in a ref so retryRow can read the payload.
   const savedRef = useRef(saved);
@@ -990,7 +1010,9 @@ export default function BulkRegistrationDesk({
             <Field label="Initial" w="w-16">
               <input
                 value={draft.initial}
-                onChange={(e) => patch({ initial: e.target.value })}
+                onChange={(e) =>
+                  patch({ initial: e.target.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 3) })
+                }
                 placeholder="K"
                 className={inputCls}
               />
@@ -999,8 +1021,10 @@ export default function BulkRegistrationDesk({
               <input
                 ref={nameInputRef}
                 value={draft.full_name}
-                onChange={(e) => patch({ full_name: e.target.value })}
-                placeholder="Athlete full name"
+                onChange={(e) =>
+                  patch({ full_name: e.target.value.replace(/[^A-Za-z ]/g, "").toUpperCase() })
+                }
+                placeholder="ATHLETE FULL NAME"
                 className={inputCls}
                 autoComplete="off"
               />
@@ -1040,7 +1064,7 @@ export default function BulkRegistrationDesk({
               </div>
             </Field>
 
-            <Field label="Mobile (10 dig)" w="w-36">
+            <Field label="Mobile" w="w-36">
               <input
                 inputMode="numeric"
                 value={draft.mobile}
@@ -1048,12 +1072,12 @@ export default function BulkRegistrationDesk({
                 onChange={(e) =>
                   patch({ mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })
                 }
-                placeholder="98XXXXXXXX"
+                placeholder="10 digits"
                 className={`${inputCls} font-mono`}
               />
             </Field>
 
-            <Field label="Aadhaar (opt)" w="w-40">
+            <Field label="Aadhaar" w="w-40">
               <input
                 inputMode="numeric"
                 value={draft.aadhaar}
@@ -1345,6 +1369,44 @@ export default function BulkRegistrationDesk({
           </legend>
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+              Channel:
+            </span>
+            {(
+              [
+                { value: "offline", label: "Offline", fee: effectiveOfflineFee },
+                { value: "online", label: "Online", fee: defaultFee },
+              ] as const
+            ).map((c) => {
+              const active = draft.channel === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() =>
+                    patch({
+                      channel: c.value,
+                      // Re-arm auto-sync of total when the operator hasn't
+                      // edited it manually, so the fee follows the channel.
+                      total_touched: draft.total_touched,
+                    })
+                  }
+                  className={`h-8 border-2 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.2em] ${
+                    active ? "border-ink bg-ink text-bone" : "border-ink/40 hover:border-ink"
+                  }`}
+                  title={`Per-hand fee ₹${c.fee}`}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+            {effectiveOfflineFee !== defaultFee && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+                ₹{effectiveOfflineFee} desk · ₹{defaultFee} online
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
               Method:
             </span>
             {(
@@ -1385,7 +1447,7 @@ export default function BulkRegistrationDesk({
                     total_touched: true,
                   });
                 }}
-                title={`Suggested ${entryCount || 1} × ₹${defaultFee} = ₹${suggestedTotal}`}
+                title={`Suggested ${entryCount || 1} × ₹${perHandFee} = ₹${suggestedTotal}`}
                 className={`${inputCls} text-right font-mono tabular-nums ${
                   waivedFee > 0 ? "border-gold" : ""
                 }`}
@@ -1430,7 +1492,7 @@ export default function BulkRegistrationDesk({
                 Waived ₹{waivedFee}
               </span>
             )}
-            {draft.payment_method === "manual_upi" && (
+            {draft.payment_method === "manual_upi" && SHOW_UPI_PROOF_UI && (
               <Field label="UTR (opt)" w="w-44">
                 <input
                   value={draft.payment_utr}
@@ -1457,7 +1519,6 @@ export default function BulkRegistrationDesk({
             {(
               [
                 { label: "Full", value: totalFee },
-                { label: "Half", value: Math.round(totalFee / 2) },
                 { label: "₹0", value: 0 },
               ] as const
             ).map((q) => {
@@ -1484,7 +1545,7 @@ export default function BulkRegistrationDesk({
               {waivedFee > 0 && <span className="ml-2 text-gold">· waived ₹{waivedFee}</span>}
             </span>
           </div>
-          {draft.payment_method === "manual_upi" ? (
+          {SHOW_UPI_PROOF_UI && (draft.payment_method === "manual_upi" ? (
           <div className="flex items-center gap-3">
             {draft.proof_preview ? (
               <img
@@ -1522,7 +1583,7 @@ export default function BulkRegistrationDesk({
             <p className="border-2 border-dashed border-ink/30 bg-kraft/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/60">
               Cash collected at counter — no UTR/proof needed.
             </p>
-          )}
+          ))}
         </fieldset>
 
         {error && (
@@ -1544,7 +1605,7 @@ export default function BulkRegistrationDesk({
           </button>
           <button
             type="button"
-            onClick={editingClientId ? cancelEdit : () => setDraft(emptyDraft(defaultFee, defaultMethod))}
+            onClick={editingClientId ? cancelEdit : () => setDraft(emptyDraft(effectiveOfflineFee, defaultMethod, "offline"))}
             className="border-2 border-ink/40 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-ink/60 hover:border-ink hover:text-ink"
           >
             {editingClientId ? "Cancel edit" : "Clear form"}
@@ -1640,7 +1701,7 @@ export default function BulkRegistrationDesk({
                   else (e.target as HTMLInputElement).blur();
                 }
               }}
-              placeholder="Search name, chest, mobile, district…"
+              placeholder="Search Name, Chest, Mobile, District…"
               className={`${inputCls} pl-7 pr-16`}
               type="search"
               autoComplete="off"
@@ -1674,8 +1735,7 @@ export default function BulkRegistrationDesk({
                 [
                   ["", "All"],
                   ["paid", "Paid"],
-                  ["partial", "Partial"],
-                  ["due", "Due"],
+                  ["non-paid", "Non-paid"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -1699,9 +1759,8 @@ export default function BulkRegistrationDesk({
               {(
                 [
                   ["", "All"],
-                  ["weighed-in", "Weighed-in"],
-                  ["not-arrived", "Not arrived"],
-                  ["no-show", "No-show"],
+                  ["weighed-in", "Checked-in"],
+                  ["not-weighed-in", "Not checked-in"],
                 ] as const
               ).map(([value, label]) => (
                 <button

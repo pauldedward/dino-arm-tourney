@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/roles";
 import { createServiceClient } from "@/lib/db/supabase-service";
 import AuditFilterBar from "@/components/admin/AuditFilterBar";
+import Pagination from "@/components/admin/Pagination";
 import { resolveAuditTargets } from "@/lib/audit-resolver";
 import {
   CATEGORY_STYLE,
@@ -20,9 +21,12 @@ type Search = {
   category?: string;
   actor?: string;
   since?: string;
+  page?: string;
+  pageSize?: string;
 };
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+const DEFAULT_PAGE_SIZE = 200;
 
 export default async function AuditPage({
   searchParams,
@@ -39,13 +43,22 @@ export default async function AuditPage({
     ? catalog.filter((c) => c.category === sp.category).map((c) => c.action)
     : null;
 
+  const pageSizeRaw = Number.parseInt(sp.pageSize ?? "", 10);
+  const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSizeRaw)
+    ? pageSizeRaw
+    : DEFAULT_PAGE_SIZE;
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   let q = svc
     .from("audit_log")
     .select(
-      "id, created_at, event_id, actor_id, actor_label, action, target_table, target_id, payload"
+      "id, created_at, event_id, actor_id, actor_label, action, target_table, target_id, payload",
+      { count: "estimated" }
     )
     .order("created_at", { ascending: false })
-    .limit(PAGE_SIZE);
+    .range(from, to);
   if (sp.event) q = q.eq("event_id", sp.event);
   if (sp.action) q = q.eq("action", sp.action);
   else if (categoryActions && categoryActions.length > 0)
@@ -53,7 +66,7 @@ export default async function AuditPage({
   if (sp.actor) q = q.eq("actor_id", sp.actor);
   if (sp.since) q = q.gte("created_at", sp.since);
 
-  const [{ data: events }, { data: actors }, { data: rows, error }] =
+  const [{ data: events }, { data: actors }, { data: rows, error, count }] =
     await Promise.all([
       svc
         .from("events")
@@ -63,6 +76,7 @@ export default async function AuditPage({
       svc.from("profiles").select("id, full_name, email").limit(200),
       q,
     ]);
+  const total = count ?? rows?.length ?? 0;
 
   const targets = await resolveAuditTargets(rows ?? []);
 
@@ -114,8 +128,8 @@ export default async function AuditPage({
         </p>
         <h1 className="mt-2 font-display text-5xl font-black tracking-tight">Audit</h1>
         <p className="mt-2 font-mono text-xs text-ink/60">
-          Append-only timeline. Showing the {PAGE_SIZE} most recent events that match
-          your filters.
+          Append-only timeline. Newest first. Use the pager below to walk
+          older entries; filters narrow the whole log, not just the page.
         </p>
       </div>
 
@@ -167,6 +181,17 @@ export default async function AuditPage({
         </div>
       ) : null}
 
+      {rows?.length ? (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          itemLabel="entries"
+          options={PAGE_SIZE_OPTIONS}
+          linkBase={{ path: "/admin/audit", params: sp }}
+        />
+      ) : null}
+
       {!rows?.length ? (
         <div className="border-2 border-dashed border-ink/30 p-10 text-center">
           <p className="font-display text-2xl">No activity</p>
@@ -204,8 +229,32 @@ export default async function AuditPage({
           ))}
         </div>
       )}
+
+      {rows?.length ? (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          itemLabel="entries"
+          options={PAGE_SIZE_OPTIONS}
+          linkBase={{ path: "/admin/audit", params: sp }}
+        />
+      ) : null}
     </div>
   );
+}
+
+function buildAuditHref(sp: Search, overrides: Partial<Search>): string {
+  const next = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (typeof v === "string" && v) next.set(k, v);
+  }
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v == null || v === "") next.delete(k);
+    else next.set(k, v);
+  }
+  const qs = next.toString();
+  return `/admin/audit${qs ? `?${qs}` : ""}`;
 }
 
 function AuditRow({

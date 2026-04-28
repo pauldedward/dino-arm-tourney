@@ -13,6 +13,7 @@ import {
 } from "@/lib/rules/registration-rules";
 import { wafBucketForWeight } from "@/lib/rules/waf-2025";
 import { maskAadhaar } from "@/lib/registration";
+import { feeFor, type RegistrationChannel } from "@/lib/payments/fee";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,10 @@ interface BulkRowBody {
   payment_utr?: string;
   payment_proof_key?: string;
   approve_weighin?: boolean;
+  /** Channel the registration belongs to. Drives fee selection + lets the
+   *  desk edit an online registration without flipping its fee. Defaults
+   *  to 'offline' when omitted (counter desk = offline). */
+  channel?: RegistrationChannel;
 }
 
 function isBody(b: unknown): b is BulkRowBody {
@@ -90,7 +95,7 @@ export async function POST(req: Request) {
   const svc = createServiceClient();
   const { data: event } = await svc
     .from("events")
-    .select("id, slug, starts_at, entry_fee_default_inr, status, payment_mode")
+    .select("id, slug, starts_at, entry_fee_default_inr, entry_fee_offline_inr, status, payment_mode")
     .eq("id", body.event_id)
     .maybeSingle();
   if (!event) {
@@ -217,6 +222,11 @@ export async function POST(req: Request) {
 
   const wantsApprove = !!body.approve_weighin;
   const wantsVerifiedPayment = body.payment_status === "verified";
+  // Channel is explicit so editing an online registration from the counter
+  // desk doesn't silently flip its fee bracket. Default to 'offline'
+  // because the desk creates offline rows by definition.
+  const channel: RegistrationChannel =
+    body.channel === "online" ? "online" : "offline";
 
   const insertRow = {
     event_id: event.id,
@@ -252,6 +262,7 @@ export async function POST(req: Request) {
     photo_bytes: body.photo_bytes ?? null,
     paid_amount_inr: body.paid_amount_inr ?? 0,
     submitted_by: "bulk",
+    channel,
   };
 
   const { data: inserted, error: insErr } = await svc
@@ -280,15 +291,15 @@ export async function POST(req: Request) {
     explicitMethod ?? (eventMode === "offline" ? "cash" : "manual_upi");
 
   // Total fee owed = client-computed (entries × per-hand) when supplied,
-  // else fall back to single-entry default. Collected = what the operator
-  // typed in the Paid field. Waiver method = collected covers the whole
-  // total (one waiver collection row).
+  // else fall back to the per-channel single-entry default. Collected =
+  // what the operator typed in the Paid field. Waiver method = collected
+  // covers the whole total (one waiver collection row).
   const totalFee = Math.max(
     0,
     Math.round(
       typeof body.total_fee_inr === "number" && Number.isFinite(body.total_fee_inr)
         ? body.total_fee_inr
-        : event.entry_fee_default_inr ?? 0
+        : feeFor(channel, event)
     )
   );
   const collectedAmount = Math.max(
@@ -388,6 +399,7 @@ export async function POST(req: Request) {
       payment_method: paymentMethod,
       total_fee_inr: totalFee,
       collected_inr: collectedEffective,
+      channel,
       weighed_in: !!weighInId,
     },
   });

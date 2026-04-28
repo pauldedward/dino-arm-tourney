@@ -127,14 +127,36 @@ export default async function EventPage({
           {/* Text column */}
           <div className="relative order-2 md:order-1">
             <div
-              className="inline-block border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em]"
-              style={{ borderColor: `${onPrimary}40`, color: accent }}
+              className="inline-flex flex-wrap items-center gap-2"
             >
-              {regOpen
-                ? "● Registration open"
-                : opensAt && opensAt > now
-                  ? "Opens soon"
-                  : "Registration closed"}
+              <div
+                className="inline-block border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em]"
+                style={{ borderColor: `${onPrimary}40`, color: accent }}
+              >
+                {regOpen
+                  ? "● Registration open"
+                  : opensAt && opensAt > now
+                    ? "Opens soon"
+                    : "Registration closed"}
+              </div>
+              <Link
+                href={`/e/${slug}/live`}
+                prefetch
+                className="group inline-flex items-center gap-2 border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] transition hover:bg-white/10"
+                style={{ borderColor: accent, color: accent }}
+              >
+                <span aria-hidden className="relative flex h-2 w-2">
+                  <span
+                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                    style={{ background: accent }}
+                  />
+                  <span
+                    className="relative inline-flex h-2 w-2 rounded-full"
+                    style={{ background: accent }}
+                  />
+                </span>
+                Watch live →
+              </Link>
             </div>
             <h1 className="mt-4 font-display text-4xl font-black leading-[0.95] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
               {event.name}

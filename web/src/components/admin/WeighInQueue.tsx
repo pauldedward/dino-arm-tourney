@@ -234,6 +234,20 @@ function Section({
   open: boolean;
   onToggle: () => void;
 }) {
+  // Per-section pagination — keeps the DOM lean for events with hundreds
+  // of pending rows. Hidden until > 25 rows so small events stay flat.
+  const PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  // Reset to page 1 when row set shrinks (filter typed).
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const visible = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const showPager = rows.length > 25;
+
   return (
     <section className="space-y-2">
       <button
@@ -267,14 +281,15 @@ function Section({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => {
+            {visible.map((r, i) => {
               const wi = r.weigh_ins?.[0];
-              const isCur = offset + i === cursor;
+              const realIndex = (safePage - 1) * pageSize + i;
+              const isCur = offset + realIndex === cursor;
               const pay = paymentSummary(r);
               return (
                 <tr
                   key={r.id}
-                  onMouseEnter={() => onHover(offset + i)}
+                  onMouseEnter={() => onHover(offset + realIndex)}
                   className={`border-b border-ink/10 last:border-b-0 ${
                     isCur ? "bg-kraft/40" : "hover:bg-kraft/10"
                   }`}
@@ -333,6 +348,78 @@ function Section({
           </tbody>
         </table>
       </div>
+      )}
+      {open && showPager && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink bg-bone px-3 py-2 font-mono text-[11px]">
+          <div className="flex items-center gap-3 text-ink/70">
+            <span>
+              <span className="font-bold tabular-nums">
+                {(safePage - 1) * pageSize + 1}
+              </span>
+              –
+              <span className="font-bold tabular-nums">
+                {Math.min(rows.length, safePage * pageSize)}
+              </span>{" "}
+              of <span className="font-bold tabular-nums">{rows.length}</span>
+            </span>
+            <span className="text-ink/40">·</span>
+            <span>
+              Page <span className="font-bold tabular-nums">{safePage}</span>{" "}
+              / <span className="tabular-nums">{totalPages}</span>
+            </span>
+            <label className="flex items-center gap-1 text-ink/60">
+              <span className="uppercase tracking-[0.2em]">Per page</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage(1)}
+              className="border border-ink px-3 py-1 uppercase tracking-[0.2em] disabled:opacity-30"
+            >
+              « first
+            </button>
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="border border-ink px-3 py-1 uppercase tracking-[0.2em] disabled:opacity-30"
+            >
+              ← prev
+            </button>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="border border-ink px-3 py-1 uppercase tracking-[0.2em] disabled:opacity-30"
+            >
+              next →
+            </button>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage(totalPages)}
+              className="border border-ink px-3 py-1 uppercase tracking-[0.2em] disabled:opacity-30"
+            >
+              last »
+            </button>
+          </div>
+        </div>
       )}
     </section>
   );

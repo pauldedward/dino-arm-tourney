@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
   // Legacy single-axis filter (kept for back-compat).
   const statusFilter = sp.get("status") ?? "";
   // New orthogonal filters. UI sends one or both; absent → no filter.
-  const payFilter = sp.get("pay") ?? ""; // "" | "paid" | "partial" | "due"
-  const checkinFilter = sp.get("checkin") ?? ""; // "" | "weighed-in" | "no-show" | "not-arrived"
+  const payFilter = sp.get("pay") ?? ""; // "" | "paid" | "non-paid" (legacy: "partial" | "due")
+  const checkinFilter = sp.get("checkin") ?? ""; // "" | "weighed-in" | "not-weighed-in" (legacy: "no-show" | "not-arrived")
 
   const svc = createServiceClient();
 
@@ -156,6 +156,8 @@ export async function GET(req: NextRequest) {
   const pay = payFilter || statusFilter;
   if (pay === "paid") {
     rows = rows.filter((r) => r.payment_status === "verified");
+  } else if (pay === "non-paid") {
+    rows = rows.filter((r) => r.payment_status !== "verified");
   } else if (pay === "partial") {
     rows = rows.filter(
       (r) =>

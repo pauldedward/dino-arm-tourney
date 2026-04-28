@@ -29,7 +29,7 @@ export default async function CounterDeskPage({
   const svc = createServiceClient();
   const { data: event } = await svc
     .from("events")
-    .select("id, slug, name, starts_at, entry_fee_default_inr, payment_mode, upi_id")
+    .select("id, slug, name, starts_at, entry_fee_default_inr, entry_fee_offline_inr, payment_mode, upi_id")
     .eq("id", ref.id)
     .maybeSingle();
   if (!event) redirect("/admin/events?gone=event");
@@ -39,6 +39,13 @@ export default async function CounterDeskPage({
   // blocked on a registrations→payments join.
   const initialSaved: SavedRow[] = [];
 
+  const onlineFee = event.entry_fee_default_inr ?? 0;
+  const offlineFee = event.entry_fee_offline_inr ?? onlineFee;
+  const feesDiffer = onlineFee !== offlineFee;
+  const feeLabel = feesDiffer
+    ? `₹${offlineFee} desk · ₹${onlineFee} online`
+    : `₹${onlineFee}`;
+
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-4">
@@ -47,9 +54,9 @@ export default async function CounterDeskPage({
             {event.name} · operator desk
           </p>
           <h1 className="mt-1 font-display text-3xl font-black tracking-tight">
-            Counter desk
+            Counter Desk
             <span className="ml-3 align-middle font-mono text-[11px] font-normal uppercase tracking-[0.2em] text-ink/50">
-              fee ₹{event.entry_fee_default_inr ?? 0} · Ctrl+Enter to save
+              fee {feeLabel} · Ctrl+Enter to save
             </span>
           </h1>
         </div>
@@ -74,7 +81,8 @@ export default async function CounterDeskPage({
       <BulkRegistrationDesk
         eventId={event.id}
         eventStartsAt={event.starts_at}
-        defaultFee={event.entry_fee_default_inr ?? 0}
+        defaultFee={onlineFee}
+        offlineFee={offlineFee}
         paymentMode={(event.payment_mode as "online_upi" | "offline" | "hybrid" | null) ?? "online_upi"}
         districts={TN_DISTRICTS}
         initialSaved={initialSaved}

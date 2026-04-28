@@ -228,6 +228,7 @@ export async function POST(req: Request) {
     photo_bytes: body.photo_bytes ?? null,
     paid_amount_inr: 0,
     submitted_by: "self",
+    channel: "online" as const,
   };
 
   const { data: inserted, error: insErr } = await svc

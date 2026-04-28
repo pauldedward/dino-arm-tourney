@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 interface User {
@@ -27,6 +27,11 @@ const ROLES = ["super_admin", "operator", "athlete"] as const;
 export default function UsersTable({ users: initial, meId }: { users: User[]; meId: string }) {
   const confirmDialog = useConfirm();
   const [users, setUsers] = useState<User[]>(initial);
+  // Re-sync when the server sends a new page (URL pagination). Selection
+  // and filter survive across navigations.
+  useEffect(() => {
+    setUsers(initial);
+  }, [initial]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClicked, setLastClicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -202,7 +207,7 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3 border-2 border-ink p-3">
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Filter</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Filter (this page)</span>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -211,7 +216,7 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
           />
         </label>
         <div className="ml-auto font-mono text-[10px] text-ink/50">
-          {visible.length} of {users.length}
+          {visible.length} of {users.length} on page
         </div>
       </div>
 

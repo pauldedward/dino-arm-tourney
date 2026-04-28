@@ -36,7 +36,7 @@ export async function GET(
        district, team, mobile, aadhaar, aadhaar_masked, declared_weight_kg,
        nonpara_classes, nonpara_hand, nonpara_hands, age_categories,
        is_para, para_codes, para_hand, photo_url, photo_bytes,
-       paid_amount_inr, status, chest_no, athlete_id,
+       paid_amount_inr, status, chest_no, athlete_id, channel,
        payments(amount_inr, status, method, utr, proof_url)`
     )
     .eq("id", id)
@@ -109,6 +109,7 @@ export async function GET(
     payment_utr: pay?.utr ?? "",
     payment_proof_key: pay?.proof_url ?? null,
     approve_weighin: reg.status === "weighed_in",
+    channel: (reg.channel as "online" | "offline" | null) ?? "offline",
   };
 
   return NextResponse.json(

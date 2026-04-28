@@ -2,23 +2,73 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/db/supabase-service";
 import { requireRole } from "@/lib/auth/roles";
 import PendingLink from "@/components/PendingLink";
+import Pagination from "@/components/admin/Pagination";
 import DeleteEventButton from "./DeleteEventButton";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 25;
+
+type Search = { gone?: string; page?: string; pageSize?: string; status?: string };
+
 export default async function EventsList({
   searchParams,
 }: {
-  searchParams?: Promise<{ gone?: string }>;
+  searchParams?: Promise<Search>;
 }) {
   const session = await requireRole("operator", "/admin/events");
   const isSuper = session.role === "super_admin";
-  const { gone } = (searchParams ? await searchParams : {}) as { gone?: string };
+  const sp = (searchParams ? await searchParams : {}) as Search;
+  const { gone } = sp;
+
+  const pageSizeRaw = Number.parseInt(sp.pageSize ?? "", 10);
+  const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSizeRaw)
+    ? pageSizeRaw
+    : DEFAULT_PAGE_SIZE;
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   const svc = createServiceClient();
-  const { data: events } = await svc
+  let query = svc
     .from("events")
-    .select("id, slug, name, status, starts_at, venue_city, venue_state, registration_published_at, registration_closed_at")
-    .order("starts_at", { ascending: false });
+    .select(
+      "id, slug, name, status, starts_at, venue_city, venue_state, registration_published_at, registration_closed_at",
+      { count: "estimated" }
+    )
+    .order("starts_at", { ascending: false })
+    .range(from, to);
+  if (sp.status) query = query.eq("status", sp.status);
+  const { data: events, count } = await query;
+  const total = count ?? events?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const buildHref = (overrides: Partial<Search>) => {
+    const next = new URLSearchParams();
+    for (const [k, v] of Object.entries(sp)) {
+      if (typeof v === "string" && v && k !== "gone") next.set(k, v);
+    }
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v == null || v === "") next.delete(k);
+      else next.set(k, v);
+    }
+    const qs = next.toString();
+    return `/admin/events${qs ? `?${qs}` : ""}`;
+  };
+
+  // `gone` is a one-shot banner flag — strip it from the params we hand to
+  // the paginator so it doesn't persist on every nav.
+  const linkParams: Record<string, string | undefined> = { ...sp, gone: undefined };
+
+  const STATUS_FILTERS: Array<{ value: string; label: string }> = [
+    { value: "", label: "All" },
+    { value: "draft", label: "Draft" },
+    { value: "open", label: "Published" },
+    { value: "live", label: "Live" },
+    { value: "completed", label: "Completed" },
+    { value: "archived", label: "Archived" },
+  ];
 
   return (
     <div className="space-y-8">
@@ -43,6 +93,31 @@ export default async function EventsList({
           New event +
         </Link>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em]">
+        <span className="text-ink/50">Status</span>
+        {STATUS_FILTERS.map((f) => {
+          const active = (sp.status ?? "") === f.value;
+          return (
+            <Link
+              key={f.value || "all"}
+              href={buildHref({ status: f.value, page: "1" })}
+              className={`border px-2 py-1 ${active ? "border-ink bg-ink text-bone" : "border-ink/40 text-ink/70 hover:border-ink hover:text-ink"}`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        itemLabel="events"
+        options={PAGE_SIZE_OPTIONS}
+        linkBase={{ path: "/admin/events", params: linkParams }}
+      />
 
       <div className="border-2 border-ink">
         <table className="w-full text-sm">
@@ -70,6 +145,18 @@ export default async function EventsList({
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 ? (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          itemLabel="events"
+          options={PAGE_SIZE_OPTIONS}
+          compact
+          linkBase={{ path: "/admin/events", params: linkParams }}
+        />
+      ) : null}
     </div>
   );
 }

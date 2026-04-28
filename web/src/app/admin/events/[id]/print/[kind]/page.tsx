@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/roles";
@@ -9,6 +9,7 @@ import type { RegistrationLite } from "@/lib/rules/resolve";
 import { formatCategoryCode } from "@/lib/rules/category-label";
 import { loadPaymentReport } from "@/lib/sheets/loaders";
 import { isFixtureEligible } from "@/lib/registrations/eligibility";
+import Pagination from "@/components/admin/Pagination";
 import PreviewToolbar from "./PreviewToolbar";
 import CategorySectionActions from "./CategorySectionActions";
 import IdCardsGrid from "./IdCardsGrid";
@@ -21,7 +22,7 @@ import {
 export const dynamic = "force-dynamic";
 
 // Sheets that ship in BOTH PDF and XLSX get an xlsx download button on the
-// same preview page — never split across two routes. Keep this set in sync
+// same preview page â€” never split across two routes. Keep this set in sync
 // with /api/admin/sheets/[kind]/route.ts.
 const XLSX_KINDS: ReadonlySet<string> = new Set([
   "nominal",
@@ -39,7 +40,7 @@ const SHEETS = {
   },
   "payment-report": {
     title: "Payment Report",
-    blurb: "Athlete payment status with paid/due totals — PDF + XLSX from the same source.",
+    blurb: "Athlete payment status with paid/due totals â€” PDF + XLSX from the same source.",
   },
   fixtures: { title: "Fixtures", blurb: "Bracket trees per category." },
   "cash-sheet": {
@@ -54,6 +55,41 @@ function isKind(s: string): s is Kind {
   return s in SHEETS;
 }
 
+/**
+ * Per-kind on-screen pagination defaults. Print/PDF/XLSX endpoints stay
+ * unpaginated â€” these only chunk the on-screen preview so events with
+ * hundreds of athletes don't blow up the DOM.
+ */
+const PAGE_SIZE_OPTIONS_ROWS = [50, 100, 200, 500] as const;
+const PAGE_SIZE_OPTIONS_GROUPS = [5, 10, 20, 50] as const;
+const PAGE_SIZE_OPTIONS_CARDS = [9, 18, 36, 72] as const; // multiples of 9 = full A4 pages
+const DEFAULTS: Record<Kind, number> = {
+  nominal: 100,
+  category: 10,
+  "id-cards": 36,
+  "payment-report": 100,
+  fixtures: 5,
+  "cash-sheet": 100,
+};
+
+function parsePager(
+  sp: { page?: string; pageSize?: string },
+  kind: Kind,
+): { page: number; pageSize: number } {
+  const opts =
+    kind === "category" || kind === "fixtures"
+      ? PAGE_SIZE_OPTIONS_GROUPS
+      : kind === "id-cards"
+        ? PAGE_SIZE_OPTIONS_CARDS
+        : PAGE_SIZE_OPTIONS_ROWS;
+  const psRaw = Number.parseInt(sp.pageSize ?? "", 10);
+  const pageSize = (opts as readonly number[]).includes(psRaw)
+    ? psRaw
+    : DEFAULTS[kind];
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  return { page, pageSize };
+}
+
 function matchQ(q: string, ...fields: (string | number | null | undefined)[]) {
   if (!q) return true;
   const needle = q.toLowerCase();
@@ -65,7 +101,13 @@ export default async function PrintPreviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string; kind: string }>;
-  searchParams: Promise<{ q?: string; division?: string; category?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    division?: string;
+    category?: string;
+    page?: string;
+    pageSize?: string;
+  }>;
 }) {
   const { id: idOrSlug, kind } = await params;
   if (!isKind(kind)) notFound();
@@ -80,6 +122,9 @@ export default async function PrintPreviewPage({
   const q = (sp.q ?? "").trim();
   const division = sp.division ?? "";
   const category = sp.category ?? "";
+  const { page, pageSize } = parsePager(sp, kind);
+  const basePath = `/admin/events/${eventSlug}/print/${kind}`;
+  const linkBase = { path: basePath, params: sp as Record<string, string | undefined> };
 
   const svc = createServiceClient();
   const { data: event } = await svc
@@ -98,7 +143,7 @@ export default async function PrintPreviewPage({
     <div className="space-y-4">
       <div className="print:hidden">
         <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
-          {event.name} · Preview before print
+          {event.name} Â· Preview before print
         </p>
         <h1 className="mt-1 font-display text-4xl font-black tracking-tight">
           {sheet.title}
@@ -109,14 +154,14 @@ export default async function PrintPreviewPage({
             href={`/admin/events/${eventSlug}/print`}
             className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
           >
-            ← all sheets
+            â† all sheets
           </Link>
           {kind === "id-cards" && (
             <Link
               href={`/admin/events/${eventSlug}/branding`}
               className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
             >
-              edit ID card branding →
+              edit ID card branding â†’
             </Link>
           )}
         </div>
@@ -124,27 +169,27 @@ export default async function PrintPreviewPage({
 
       {kind === "nominal" && (
         <Suspense fallback={<PreviewSkeleton />}>
-          <NominalPreview eventId={eventId} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} division={division} />
+          <NominalPreview eventId={eventId} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} division={division} page={page} pageSize={pageSize} linkBase={linkBase} />
         </Suspense>
       )}
       {kind === "category" && (
         <Suspense fallback={<PreviewSkeleton />}>
-          <CategoryPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} category={category} />
+          <CategoryPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} category={category} page={page} pageSize={pageSize} linkBase={linkBase} />
         </Suspense>
       )}
       {kind === "id-cards" && (
         <Suspense fallback={<PreviewSkeleton />}>
-          <IdCardsPreview eventId={eventId} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} division={division} />
+          <IdCardsPreview eventId={eventId} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} division={division} page={page} pageSize={pageSize} linkBase={linkBase} />
         </Suspense>
       )}
       {kind === "payment-report" && (
         <Suspense fallback={<PreviewSkeleton />}>
-          <PaymentReportPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} />
+          <PaymentReportPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} xlsxUrl={xlsxUrl} q={q} page={page} pageSize={pageSize} linkBase={linkBase} />
         </Suspense>
       )}
       {kind === "fixtures" && (
         <Suspense fallback={<PreviewSkeleton />}>
-          <FixturesPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} q={q} category={category} />
+          <FixturesPreview eventId={eventId} eventSlug={eventSlug} pdfUrl={pdfUrl} q={q} category={category} page={page} pageSize={pageSize} linkBase={linkBase} />
         </Suspense>
       )}
       {kind === "cash-sheet" && (
@@ -164,12 +209,18 @@ async function NominalPreview({
   xlsxUrl,
   q,
   division,
+  page,
+  pageSize,
+  linkBase,
 }: {
   eventId: string;
   pdfUrl: string;
   xlsxUrl?: string;
   q: string;
   division: string;
+  page: number;
+  pageSize: number;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
 }) {
   const svc = createServiceClient();
   const { data } = await svc
@@ -189,6 +240,8 @@ async function NominalPreview({
       (!division || r.division === division) &&
       matchQ(q, r.full_name, r.chest_no, r.district, r.team)
   );
+  const total = filtered.length;
+  const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <>
@@ -196,10 +249,18 @@ async function NominalPreview({
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         divisions={divisions}
-        totalLabel={`${filtered.length} of ${all.length}`}
+        totalLabel={`${total} of ${all.length}`}
         zipUrl={`/api/admin/nominal.zip?event_id=${eventId}${
           division ? `&division=${encodeURIComponent(division)}` : ""
         }${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+      />
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_ROWS}
+        itemLabel="athletes"
+        linkBase={linkBase}
       />
       <div className="border-2 border-ink">
         <table className="w-full border-collapse font-mono text-xs">
@@ -215,21 +276,30 @@ async function NominalPreview({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r, i) => (
+            {slice.map((r, i) => (
               <tr key={i} className="border-t border-ink/20 even:bg-kraft/10">
-                <Td>{r.chest_no ?? "—"}</Td>
+                <Td>{r.chest_no ?? "â€”"}</Td>
                 <Td className="font-semibold">{r.full_name}</Td>
-                <Td>{r.division ?? "—"}</Td>
-                <Td>{r.district ?? "—"}</Td>
-                <Td>{r.team ?? "—"}</Td>
-                <Td className="text-right">{r.declared_weight_kg ?? "—"}</Td>
+                <Td>{r.division ?? "â€”"}</Td>
+                <Td>{r.district ?? "â€”"}</Td>
+                <Td>{r.team ?? "â€”"}</Td>
+                <Td className="text-right">{r.declared_weight_kg ?? "â€”"}</Td>
                 <Td>{r.status}</Td>
               </tr>
             ))}
-            {filtered.length === 0 && <EmptyRow cols={7} />}
+            {slice.length === 0 && <EmptyRow cols={7} />}
           </tbody>
         </table>
       </div>
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_ROWS}
+        itemLabel="athletes"
+        linkBase={linkBase}
+        compact
+      />
     </>
   );
 }
@@ -243,6 +313,9 @@ async function CategoryPreview({
   xlsxUrl,
   q,
   category,
+  page,
+  pageSize,
+  linkBase,
 }: {
   eventId: string;
   eventSlug: string;
@@ -250,11 +323,14 @@ async function CategoryPreview({
   xlsxUrl?: string;
   q: string;
   category: string;
+  page: number;
+  pageSize: number;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
 }) {
   const svc = createServiceClient();
   // Fetch event metadata, registrations, AND weigh-ins in parallel.
   // Weigh-ins are joined through registrations(event_id) so we don't
-  // round-trip a huge IN(registration_id, ...) list — that approach hit
+  // round-trip a huge IN(registration_id, ...) list â€” that approach hit
   // PostgREST URL limits and stalled this route for tens of seconds on
   // events with hundreds of athletes.
   const [eventRes, regsRes, sumsRes, wisRes] = await Promise.all([
@@ -342,6 +418,8 @@ async function CategoryPreview({
     .filter((c) => c.athletes.length > 0 || !q);
 
   const total = cats.reduce((n, c) => n + c.athletes.length, 0);
+  const totalGroups = cats.length;
+  const sliced = cats.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <>
@@ -349,10 +427,18 @@ async function CategoryPreview({
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         categories={allCats}
-        totalLabel={`${total} athletes · ${cats.length} categories`}
+        totalLabel={`${total} athletes Â· ${totalGroups} categories`}
+      />
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={totalGroups}
+        options={PAGE_SIZE_OPTIONS_GROUPS}
+        itemLabel="categories"
+        linkBase={linkBase}
       />
       <div className="space-y-4">
-        {cats.map((c) => (
+        {sliced.map((c) => (
           <div
             key={c.code}
             data-category-section={c.code}
@@ -394,9 +480,9 @@ async function CategoryPreview({
               <tbody>
                 {c.athletes.map((a, i) => (
                   <tr key={i} className="border-t border-ink/10 even:bg-kraft/5">
-                    <Td>{a.chest_no ?? "—"}</Td>
-                    <Td className="font-semibold">{a.full_name ?? "—"}</Td>
-                    <Td>{a.district ?? "—"}</Td>
+                    <Td>{a.chest_no ?? "â€”"}</Td>
+                    <Td className="font-semibold">{a.full_name ?? "â€”"}</Td>
+                    <Td>{a.district ?? "â€”"}</Td>
                   </tr>
                 ))}
                 {c.athletes.length === 0 && <EmptyRow cols={3} />}
@@ -410,6 +496,15 @@ async function CategoryPreview({
           </p>
         )}
       </div>
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={totalGroups}
+        options={PAGE_SIZE_OPTIONS_GROUPS}
+        itemLabel="categories"
+        linkBase={linkBase}
+        compact
+      />
     </>
   );
 }
@@ -422,12 +517,18 @@ async function IdCardsPreview({
   xlsxUrl,
   q,
   division,
+  page,
+  pageSize,
+  linkBase,
 }: {
   eventId: string;
   pdfUrl: string;
   xlsxUrl?: string;
   q: string;
   division: string;
+  page: number;
+  pageSize: number;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
 }) {
   const svc = createServiceClient();
   const { data } = await svc
@@ -447,12 +548,16 @@ async function IdCardsPreview({
       (!division || r.division === division) &&
       matchQ(q, r.full_name, r.chest_no, r.district, r.team)
   );
+  const total = filtered.length;
+  const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   // Photos are stored as private R2 keys; resolve to short-lived signed
   // URLs so the on-screen preview actually shows the pictures the PDF
   // will print. Failures are silent - the placeholder box still renders.
+  // Only sign URLs for the visible page â€” 600 signed-URL hits per page
+  // load was a real cost on big events.
   const rows = await Promise.all(
-    filtered.map(async (r) => {
+    slice.map(async (r) => {
       let signed: string | null = null;
       if (r.photo_url) {
         if (/^https?:\/\//i.test(r.photo_url)) {
@@ -475,9 +580,26 @@ async function IdCardsPreview({
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         divisions={divisions}
-        totalLabel={`${filtered.length} cards · ${Math.ceil(filtered.length / 9)} A4 pages`}
+        totalLabel={`${total} cards Â· ${Math.ceil(total / 9)} A4 pages`}
+      />
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_CARDS}
+        itemLabel="cards"
+        linkBase={linkBase}
       />
       <IdCardsGrid eventId={eventId} rows={rows} />
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_CARDS}
+        itemLabel="cards"
+        linkBase={linkBase}
+        compact
+      />
     </>
   );
 }
@@ -490,12 +612,18 @@ async function FixturesPreview({
   pdfUrl,
   q,
   category,
+  page,
+  pageSize,
+  linkBase,
 }: {
   eventId: string;
   eventSlug: string;
   pdfUrl: string;
   q: string;
   category: string;
+  page: number;
+  pageSize: number;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
 }) {
   const svc = createServiceClient();
   const { data } = await svc
@@ -581,7 +709,15 @@ async function FixturesPreview({
       <PreviewToolbar
         pdfUrl={pdfUrl}
         categories={allCats}
-        totalLabel={`${cats.reduce((n, c) => n + c.matches.length, 0)} matches · ${cats.length} categories`}
+        totalLabel={`${cats.reduce((n, c) => n + c.matches.length, 0)} matches Â· ${cats.length} categories`}
+      />
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={cats.length}
+        options={PAGE_SIZE_OPTIONS_GROUPS}
+        itemLabel="categories"
+        linkBase={linkBase}
       />
       <p className="mb-3 border-l-4 border-ink bg-kraft/30 px-3 py-2 font-mono text-[11px] text-ink/70 print:bg-transparent">
         Offline run-of-show: tick the winner&apos;s box, write the advancing
@@ -590,7 +726,7 @@ async function FixturesPreview({
         bracket progresses.
       </p>
       <div className="space-y-4">
-        {cats.map((c) => {
+        {cats.slice((page - 1) * pageSize, page * pageSize).map((c) => {
           // Group: side -> round -> matches.
           const bySide = new Map<Side, Map<number, Match[]>>();
           for (const m of c.matches) {
@@ -650,7 +786,7 @@ async function FixturesPreview({
                               {matches.map((m) => {
                                 // Round 1 of W is the only place a missing
                                 // slot is a real bye. Everywhere else it's a
-                                // pending slot — render a fillable line so the
+                                // pending slot â€” render a fillable line so the
                                 // ref can write the advancing name in pen.
                                 const isR1W = m.side === "W" && m.round_no === 1;
                                 const renderSlot = (
@@ -737,6 +873,15 @@ async function FixturesPreview({
           </p>
         )}
       </div>
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={cats.length}
+        options={PAGE_SIZE_OPTIONS_GROUPS}
+        itemLabel="categories"
+        linkBase={linkBase}
+        compact
+      />
     </>
   );
 }
@@ -750,12 +895,18 @@ async function PaymentReportPreview({
   pdfUrl,
   xlsxUrl,
   q,
+  page,
+  pageSize,
+  linkBase,
 }: {
   eventId: string;
   eventSlug: string;
   pdfUrl: string;
   xlsxUrl?: string;
   q: string;
+  page: number;
+  pageSize: number;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
 }) {
   const svc = createServiceClient();
   const { rows, totals } = await loadPaymentReport(svc, eventId);
@@ -770,12 +921,14 @@ async function PaymentReportPreview({
   const filtered = rows.filter((r) =>
     matchQ(q, r.full_name, r.chest_no, r.team_or_district, r.category)
   );
+  const total = filtered.length;
+  const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
   return (
     <>
       <PreviewToolbar
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
-        totalLabel={`${totals.total_athletes} athletes · ${Math.round(totals.percent_paid)}% paid · ₹${totals.total_due.toLocaleString(
+        totalLabel={`${totals.total_athletes} athletes Â· ${Math.round(totals.percent_paid)}% paid Â· â‚¹${totals.total_due.toLocaleString(
           "en-IN"
         )} due`}
       />
@@ -783,12 +936,12 @@ async function PaymentReportPreview({
         <SummaryCard label="Athletes" value={String(totals.total_athletes)} />
         <SummaryCard
           label="Paid"
-          value={`₹${totals.total_paid.toLocaleString("en-IN")}`}
+          value={`â‚¹${totals.total_paid.toLocaleString("en-IN")}`}
           tone="paid"
         />
         <SummaryCard
           label="Due"
-          value={`₹${totals.total_due.toLocaleString("en-IN")}`}
+          value={`â‚¹${totals.total_due.toLocaleString("en-IN")}`}
           tone="due"
         />
         <SummaryCard label="% Paid" value={`${Math.round(totals.percent_paid)}%`} />
@@ -796,6 +949,14 @@ async function PaymentReportPreview({
       {districts.length > 0 && (
         <DistrictSummary eventSlug={eventSlug} totals={districts} />
       )}
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_ROWS}
+        itemLabel="athletes"
+        linkBase={linkBase}
+      />
       <div className="border-2 border-ink">
         <table className="w-full border-collapse font-mono text-xs">
           <thead className="bg-ink text-paper">
@@ -804,50 +965,59 @@ async function PaymentReportPreview({
               <Th>Athlete</Th>
               <Th>Team / District</Th>
               <Th>Category</Th>
-              <Th className="text-right">Total (₹)</Th>
-              <Th className="text-right">Paid (₹)</Th>
-              <Th className="text-right">Due (₹)</Th>
+              <Th className="text-right">Total (â‚¹)</Th>
+              <Th className="text-right">Paid (â‚¹)</Th>
+              <Th className="text-right">Due (â‚¹)</Th>
               <Th>Paid by</Th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r, i) => (
+            {slice.map((r, i) => (
               <tr key={i} className="border-t border-ink/20 even:bg-kraft/10">
-                <Td>{r.chest_no ?? "—"}</Td>
+                <Td>{r.chest_no ?? "â€”"}</Td>
                 <Td className="font-semibold">{r.full_name}</Td>
-                <Td>{r.team_or_district ?? "—"}</Td>
-                <Td>{r.category ?? "—"}</Td>
+                <Td>{r.team_or_district ?? "â€”"}</Td>
+                <Td>{r.category ?? "â€”"}</Td>
                 <Td className="text-right">
-                  {r.total_inr ? r.total_inr.toLocaleString("en-IN") : "—"}
+                  {r.total_inr ? r.total_inr.toLocaleString("en-IN") : "â€”"}
                 </Td>
                 <Td className="text-right">
-                  {r.paid_inr ? r.paid_inr.toLocaleString("en-IN") : "—"}
+                  {r.paid_inr ? r.paid_inr.toLocaleString("en-IN") : "â€”"}
                 </Td>
                 <Td className="text-right">
-                  {r.due_inr ? r.due_inr.toLocaleString("en-IN") : "—"}
+                  {r.due_inr ? r.due_inr.toLocaleString("en-IN") : "â€”"}
                 </Td>
-                <Td>{r.paid_by ?? "—"}</Td>
+                <Td>{r.paid_by ?? "â€”"}</Td>
               </tr>
             ))}
-            {filtered.length === 0 && <EmptyRow cols={8} />}
+            {slice.length === 0 && <EmptyRow cols={8} />}
             {filtered.length > 0 && (
               <tr className="border-t-2 border-ink bg-volt/30 font-bold">
                 <Td colSpan={4} className="text-right uppercase tracking-[0.2em]">
-                  Grand Total
+                  Grand Total (all {filtered.length})
                 </Td>
-                <Td className="text-right">—</Td>
+                <Td className="text-right">â€”</Td>
                 <Td className="text-right">
-                  ₹{totals.total_paid.toLocaleString("en-IN")}
+                  â‚¹{totals.total_paid.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  ₹{totals.total_due.toLocaleString("en-IN")}
+                  â‚¹{totals.total_due.toLocaleString("en-IN")}
                 </Td>
-                <Td>—</Td>
+                <Td>â€”</Td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      <PreviewPager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={PAGE_SIZE_OPTIONS_ROWS}
+        itemLabel="athletes"
+        linkBase={linkBase}
+        compact
+      />
     </>
   );
 }
@@ -872,7 +1042,7 @@ async function CashSheetPreview({
   // Use payment_summary view (single source of truth defined in
   // migration 0028) so partial collections are counted correctly. The
   // legacy query summed amount_inr filtered by status='verified' and
-  // mis-reported partials as ₹0 paid / full ₹ pending.
+  // mis-reported partials as â‚¹0 paid / full â‚¹ pending.
   const { data: sums } = await svc
     .from("payment_summary")
     .select("registration_id, total_inr, collected_inr, derived_status")
@@ -918,7 +1088,7 @@ async function CashSheetPreview({
     <>
       <PreviewToolbar
         pdfUrl={pdfUrl}
-        totalLabel={`${rows.length} district${rows.length === 1 ? "" : "s"} · ${grand.athletes} athletes · ₹${grand.expected.toLocaleString(
+        totalLabel={`${rows.length} district${rows.length === 1 ? "" : "s"} Â· ${grand.athletes} athletes Â· â‚¹${grand.expected.toLocaleString(
           "en-IN"
         )} expected`}
       />
@@ -928,9 +1098,9 @@ async function CashSheetPreview({
             <tr>
               <Th>District</Th>
               <Th className="text-right">Athletes</Th>
-              <Th className="text-right">Expected (₹)</Th>
-              <Th className="text-right">Collected (₹)</Th>
-              <Th className="text-right">Pending (₹)</Th>
+              <Th className="text-right">Expected (â‚¹)</Th>
+              <Th className="text-right">Collected (â‚¹)</Th>
+              <Th className="text-right">Pending (â‚¹)</Th>
             </tr>
           </thead>
           <tbody>
@@ -951,13 +1121,13 @@ async function CashSheetPreview({
                 <Td className="uppercase tracking-[0.2em]">Grand Total</Td>
                 <Td className="text-right">{grand.athletes}</Td>
                 <Td className="text-right">
-                  ₹{grand.expected.toLocaleString("en-IN")}
+                  â‚¹{grand.expected.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  ₹{grand.paid.toLocaleString("en-IN")}
+                  â‚¹{grand.paid.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  ₹{(grand.expected - grand.paid).toLocaleString("en-IN")}
+                  â‚¹{(grand.expected - grand.paid).toLocaleString("en-IN")}
                 </Td>
               </tr>
             )}
@@ -1050,8 +1220,46 @@ function PreviewSkeleton() {
       <div className="h-10 animate-pulse border-2 border-ink/20 bg-kraft/10" />
       <div className="h-32 animate-pulse border-2 border-ink/20 bg-kraft/10" />
       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
-        loading sheet…
+        loading sheetâ€¦
       </p>
+    </div>
+  );
+}
+
+/**
+ * On-screen-only pager. Hidden from print + the official PDF/XLSX
+ * exports so the printable artefact still contains the full set of
+ * rows. Wraps the shared admin Pagination in link-mode.
+ */
+function PreviewPager({
+  page,
+  pageSize,
+  total,
+  options,
+  itemLabel,
+  linkBase,
+  compact = false,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  options: readonly number[];
+  itemLabel: string;
+  linkBase: { path: string; params?: Record<string, string | undefined> };
+  compact?: boolean;
+}) {
+  if (total <= pageSize && page === 1) return null;
+  return (
+    <div className="print:hidden">
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        options={options}
+        itemLabel={itemLabel}
+        compact={compact}
+        linkBase={linkBase}
+      />
     </div>
   );
 }

@@ -147,8 +147,11 @@ export default async function EventDetail({
         />
         <QuickLink href={`/admin/events/${event.slug}/weighin`} title="Weigh-in" desc="Capture measured weight + live photo." />
         <QuickLink href={`/admin/events/${event.slug}/print`} title="Print & Fixtures" desc="Nominal, category, ID cards. Generate brackets, print fixtures." />
+        <QuickLink href={`/admin/events/${event.slug}/run`} title="Run fixtures" desc="Match-day console. Mark winners, auto-advance brackets." />
+        <QuickLink href={`/admin/events/${event.slug}/standings`} title="Standings" desc="Medals by category, district medal table." />
         <QuickLink href={`/admin/events/${event.slug}/edit`} title="Edit event" desc="Branding, payment, poster, circular, operators." />
         <QuickLink href={`/e/${event.slug}/register`} title="Public form" desc="Open the registration form in a new tab." external />
+        <QuickLink href={`/e/${event.slug}/live`} title="Live (public)" desc="Spectator scoreboard for this event." external />
       </div>
     </div>
   );

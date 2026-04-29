@@ -181,21 +181,13 @@ async function buildDocument(
           .select("registration_id, derived_status")
           .eq("event_id", event.id),
       ]);
-      const derivedByReg = new Map<string, string>();
-      for (const s of sumsRes.data ?? []) {
-        derivedByReg.set(
-          s.registration_id as string,
-          s.derived_status as string,
-        );
-      }
-      const eligibleAll = (regsRes.data ?? []).filter((r) =>
-        isFixtureEligible({
-          regStatus: r.status,
-          lifecycleStatus: r.lifecycle_status as string | null,
-          disciplineStatus: r.discipline_status as string | null,
-          derivedPaymentStatus: derivedByReg.get(r.id as string) ?? null,
-          checkinStatus: r.checkin_status as string | null | undefined,
-        }),
+      // Two gates: weighed-in (locks the bucket) AND not disqualified.
+      // Once on the scale, the athlete is on the on-mat roster unless
+      // a referee has DQ'd them.
+      const eligibleAll = (regsRes.data ?? []).filter(
+        (r) =>
+          r.checkin_status === "weighed_in" &&
+          r.discipline_status !== "disqualified",
       );
       const eligible = eligibleAll.filter(
         (r) => r.gender === "M" || r.gender === "F"

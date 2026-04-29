@@ -236,17 +236,18 @@ export async function loadCategory(
   svc: SvcClient,
   eventId: string
 ): Promise<CategoryRow[]> {
-  // Filter out withdrawn / DQ'd athletes — entries rows persist even after
-  // an athlete is pulled, so we must gate on lifecycle/discipline here so
-  // the printed Category Sheet matches the live competing roster.
+  // Two gates: weighed-in (locks the bucket) AND not disqualified.
+  // Payment / lifecycle / withdrawal state is irrelevant — once an
+  // athlete crosses the scale they're on the on-mat roster, unless
+  // a referee has DQ'd them.
   const { data, error } = await svc
     .from("entries")
     .select(
-      "category_code, registrations!inner(event_id, chest_no, full_name, district, lifecycle_status, discipline_status, status)"
+      "category_code, registrations!inner(event_id, chest_no, full_name, district, checkin_status, discipline_status)"
     )
     .eq("registrations.event_id", eventId)
-    .eq("registrations.lifecycle_status", "active")
-    .eq("registrations.discipline_status", "clear");
+    .eq("registrations.checkin_status", "weighed_in")
+    .neq("registrations.discipline_status", "disqualified");
   if (error) throw new Error(error.message);
   const grouped = new Map<string, CategoryRow["athletes"]>();
   for (const e of data ?? []) {

@@ -21,6 +21,19 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// Friendly category labels (`Senior Men · −80 kg · Right`) become
+// download-safe slugs (`senior-men-80-kg-right`) so the per-category
+// CSV button produces filenames a human can read at a glance.
+function slugifyCategory(label: string): string {
+  return label
+    .normalize("NFKD")
+    // Replace any non-alphanumeric run with a single hyphen. The Unicode
+    // minus sign in weight labels and the middle-dot separators all collapse.
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
 // Sheets that ship in BOTH PDF and XLSX get an xlsx download button on the
 // same preview page — never split across two routes. Keep this set in sync
 // with /api/admin/sheets/[kind]/route.ts.
@@ -355,23 +368,13 @@ async function CategoryPreview({
   const event = eventRes.data;
   const regs = regsRes.data;
   const wis = wisRes.data ?? [];
-  // Same eligibility rule as `/api/pdf/category`: lifecycle/discipline
-  // gate + (paid OR weighed-in).
-  const derivedByReg = new Map<string, string>();
-  for (const s of sumsRes.data ?? []) {
-    derivedByReg.set(
-      s.registration_id as string,
-      s.derived_status as string,
-    );
-  }
-  const eligibleAll = (regs ?? []).filter((r) =>
-    isFixtureEligible({
-      regStatus: r.status,
-      lifecycleStatus: r.lifecycle_status as string | null,
-      disciplineStatus: r.discipline_status as string | null,
-      derivedPaymentStatus: derivedByReg.get(r.id as string) ?? null,
-      checkinStatus: r.checkin_status as string | null | undefined,
-    }),
+  // Two gates: weighed-in (locks the bucket) AND not disqualified.
+  // Once on the scale, the athlete is on the on-mat roster unless a
+  // referee has DQ'd them.
+  const eligibleAll = (regs ?? []).filter(
+    (r) =>
+      r.checkin_status === "weighed_in" &&
+      r.discipline_status !== "disqualified",
   );
   const eligible = eligibleAll.filter(
     (r) => r.gender === "M" || r.gender === "F"
@@ -462,7 +465,7 @@ async function CategoryPreview({
                 </p>
                 <CategorySectionActions
                   sectionId={c.code}
-                  filename={`${eventSlug}-category-${c.code}`}
+                  filename={`${eventSlug}-category-${slugifyCategory(formatCategoryCode(c.code))}`}
                   headers={["Chest", "Name", "District"]}
                   rows={c.athletes.map((a) => [
                     a.chest_no != null ? String(a.chest_no) : "",
@@ -758,7 +761,7 @@ async function FixturesPreview({
                 </div>
                 <CategorySectionActions
                   sectionId={c.code}
-                  filename={`${eventSlug}-fixtures-${c.code}`}
+                  filename={`${eventSlug}-fixtures-${slugifyCategory(formatCategoryCode(c.code))}`}
                   headers={["Bracket", "Round", "Match", "Side A", "Side B"]}
                   rows={c.matches.map((m) => [
                     m.side,

@@ -10,6 +10,12 @@ import {
   type SheetFilters,
 } from "@/lib/sheets/loaders";
 import { exportFilename } from "@/lib/export/filename";
+import {
+  formatCategoryCode,
+  formatCategoryListForDisplay,
+  parseCategoryCode,
+} from "@/lib/rules/category-label";
+import { wafCategory, type WafCategory } from "@/lib/rules/waf-2025";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -248,18 +254,21 @@ async function buildNominal(
     views: [{ state: "frozen", ySplit: 3 }],
   });
   ws.columns = [
-    { width: 10 },
-    { width: 28 },
-    { width: 16 },
-    { width: 18 },
-    { width: 18 },
-    { width: 10 },
-    { width: 8 },
-    { width: 10 },
-    { width: 14 },
+    { width: 10 }, // Chest
+    { width: 28 }, // Name
+    { width: 8 },  // Gender
+    { width: 12 }, // DOB
+    { width: 14 }, // Mobile
+    { width: 18 }, // Age Category
+    { width: 10 }, // Wt
+    { width: 22 }, // Team / District
+    { width: 22 }, // Event
+    { width: 8 },  // Paid
+    { width: 10 }, // Weighed
+    { width: 12 }, // Status
   ];
 
-  ws.mergeCells("A1:I1");
+  ws.mergeCells("A1:L1");
   const title = ws.getCell("A1");
   title.value = `${eventName} — Nominal Roll`;
   title.font = { name: "Calibri", size: 16, bold: true, color: { argb: "FF1F4E78" } };
@@ -273,12 +282,15 @@ async function buildNominal(
 
   const headerRow = ws.getRow(3);
   [
-    "Chest",
-    "Name",
-    "Division",
-    "District",
-    "Team",
-    "Wt (kg)",
+    "Chest Number",
+    "Athlete Name",
+    "Gender",
+    "DOB",
+    "Mobile Number",
+    "Age Category",
+    "Weight",
+    "Team / District",
+    "Event Name",
     "Paid",
     "Weighed",
     "Status",
@@ -301,30 +313,67 @@ async function buildNominal(
     row.values = [
       r.chest_no ?? "",
       r.full_name ?? "",
-      r.division ?? "",
-      r.district ?? "",
-      r.team ?? "",
+      r.gender ?? "",
+      r.dob ?? "",
+      r.mobile ?? "",
+      formatCategoryListForDisplay(r.age_categories ?? []),
       r.declared_weight_kg ?? "",
+      [r.team, r.district].filter(Boolean).join(" / "),
+      eventName,
       r.paid ? "Yes" : "No",
       r.weighed ? "Yes" : "No",
       r.status ?? "",
     ];
-    for (let c = 1; c <= 9; c++) {
+    for (let c = 1; c <= 12; c++) {
       row.getCell(c).border = thinBorder("FFBFBFBF");
     }
     // Tint the boolean columns so the operator can scan the printout
     // at a glance. Green = paid/weighed, faint red = missing.
-    tintBoolean(row.getCell(7), r.paid);
-    tintBoolean(row.getCell(8), r.weighed);
+    tintBoolean(row.getCell(10), r.paid);
+    tintBoolean(row.getCell(11), r.weighed);
     rowIdx++;
   }
 
-  ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 9 } };
+  ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
 }
 
 /* ------------------------------------------------------------------ */
-/*                        Category worksheet                          */
+/*                        Category worksheets                         */
 /* ------------------------------------------------------------------ */
+
+// 8 fixed sub-sheets: gender (M/F) × hand (R/L) × para? (no/yes).
+// Within each sheet, categories are listed youngest age-band → oldest,
+// then lightest weight bucket → heaviest, so the operator can scan
+// the printout in the natural progression of match-day flights.
+type CatBucket = {
+  sheetKey: string;
+  sheetName: string;
+  gender: "M" | "F";
+  hand: "R" | "L";
+  isPara: boolean;
+};
+
+const CATEGORY_SHEET_LAYOUT: CatBucket[] = [
+  { sheetKey: "M-R-able",  sheetName: "Men Right",        gender: "M", hand: "R", isPara: false },
+  { sheetKey: "M-L-able",  sheetName: "Men Left",         gender: "M", hand: "L", isPara: false },
+  { sheetKey: "F-R-able",  sheetName: "Women Right",      gender: "F", hand: "R", isPara: false },
+  { sheetKey: "F-L-able",  sheetName: "Women Left",       gender: "F", hand: "L", isPara: false },
+  { sheetKey: "M-R-para",  sheetName: "Para Men Right",   gender: "M", hand: "R", isPara: true  },
+  { sheetKey: "M-L-para",  sheetName: "Para Men Left",    gender: "M", hand: "L", isPara: true  },
+  { sheetKey: "F-R-para",  sheetName: "Para Women Right", gender: "F", hand: "R", isPara: true  },
+  { sheetKey: "F-L-para",  sheetName: "Para Women Left",  gender: "F", hand: "L", isPara: true  },
+];
+
+type SortedCategoryEntry = {
+  category_code: string;
+  cat: WafCategory;
+  bucketIdx: number;
+  athletes: Array<{
+    chest_no: number | null;
+    full_name: string | null;
+    district: string | null;
+  }>;
+};
 
 async function buildCategory(
   wb: ExcelJS.Workbook,
@@ -333,14 +382,99 @@ async function buildCategory(
   eventName: string
 ) {
   const cats = await loadCategory(svc, eventId);
-  const ws = wb.addWorksheet("Category Sheet", {
+
+  // Bucket every category into one of the 8 sub-sheets, falling back to
+  // a synthetic "Other" sheet only if a code cannot be parsed (defensive
+  // — should not happen for properly-coded entries).
+  const buckets = new Map<string, SortedCategoryEntry[]>();
+  for (const layout of CATEGORY_SHEET_LAYOUT) buckets.set(layout.sheetKey, []);
+  const orphans: SortedCategoryEntry[] = [];
+
+  for (const c of cats) {
+    if (c.athletes.length === 0) continue;
+    const parts = parseCategoryCode(c.category_code);
+    const waf = parts ? wafCategory(parts.classCode) : undefined;
+    if (!parts || !waf) {
+      orphans.push({
+        category_code: c.category_code,
+        cat: {
+          code: parts?.classCode ?? c.category_code,
+          className: "",
+          classFull: "",
+          gender: "M",
+          minAge: 0,
+          maxAge: null,
+          isPara: false,
+          posture: "Standing",
+          buckets: [],
+        },
+        bucketIdx: 0,
+        athletes: c.athletes,
+      });
+      continue;
+    }
+    const bucketIdx = waf.buckets.findIndex(
+      (b) => b.code === c.category_code.slice(0, c.category_code.lastIndexOf("-"))
+        || b.label === parts.weight,
+    );
+    const key = `${waf.gender}-${parts.hand}-${waf.isPara ? "para" : "able"}`;
+    const target = buckets.get(key);
+    if (!target) {
+      orphans.push({ category_code: c.category_code, cat: waf, bucketIdx, athletes: c.athletes });
+      continue;
+    }
+    target.push({
+      category_code: c.category_code,
+      cat: waf,
+      bucketIdx: bucketIdx >= 0 ? bucketIdx : 999,
+      athletes: c.athletes,
+    });
+  }
+
+  // Sort key: youngest age-band first (smallest maxAge — Junior bands
+  // capped at 23 sort before open ALL bands with no cap), then by
+  // minAge, then class code (deterministic across impairment classes
+  // that share the same age range), finally weight bucket index
+  // (lightest → heaviest as defined in waf-2025).
+  const ageOrder = (e: SortedCategoryEntry): [number, number, string, number] => [
+    e.cat.maxAge ?? 9999,
+    e.cat.minAge,
+    e.cat.code,
+    e.bucketIdx,
+  ];
+  const cmp = (a: SortedCategoryEntry, b: SortedCategoryEntry) => {
+    const ka = ageOrder(a);
+    const kb = ageOrder(b);
+    for (let i = 0; i < ka.length; i++) {
+      if (ka[i]! < kb[i]!) return -1;
+      if (ka[i]! > kb[i]!) return 1;
+    }
+    return 0;
+  };
+
+  for (const layout of CATEGORY_SHEET_LAYOUT) {
+    const entries = (buckets.get(layout.sheetKey) ?? []).slice().sort(cmp);
+    writeCategorySheet(wb, layout.sheetName, eventName, entries);
+  }
+  if (orphans.length > 0) {
+    writeCategorySheet(wb, "Other", eventName, orphans.slice().sort(cmp));
+  }
+}
+
+function writeCategorySheet(
+  wb: ExcelJS.Workbook,
+  sheetName: string,
+  eventName: string,
+  entries: SortedCategoryEntry[],
+) {
+  const ws = wb.addWorksheet(sheetName, {
     views: [{ state: "frozen", ySplit: 2 }],
   });
   ws.columns = [{ width: 18 }, { width: 10 }, { width: 28 }, { width: 22 }];
 
   ws.mergeCells("A1:D1");
   const title = ws.getCell("A1");
-  title.value = `${eventName} — Category Sheet`;
+  title.value = `${eventName} — ${sheetName}`;
   title.font = { name: "Calibri", size: 16, bold: true, color: { argb: "FF1F4E78" } };
   title.alignment = { horizontal: "center" };
   ws.getRow(1).height = 26;
@@ -358,14 +492,22 @@ async function buildCategory(
     cell.border = thinBorder("FF000000");
   });
 
+  if (entries.length === 0) {
+    ws.mergeCells("A3:D3");
+    const empty = ws.getCell("A3");
+    empty.value = "No athletes in this division.";
+    empty.font = { italic: true, color: { argb: "FF888888" } };
+    empty.alignment = { horizontal: "center" };
+    return;
+  }
+
   let rowIdx = 3;
-  for (const c of cats) {
-    const total = c.athletes.length;
-    if (total === 0) continue;
+  for (const e of entries) {
+    const total = e.athletes.length;
     // Category header band — span all columns.
     ws.mergeCells(rowIdx, 1, rowIdx, 4);
     const headerCell = ws.getCell(rowIdx, 1);
-    headerCell.value = `${c.category_code}  ·  ${total} athlete${total === 1 ? "" : "s"}`;
+    headerCell.value = `${formatCategoryCode(e.category_code)}  ·  ${e.category_code}  ·  ${total} athlete${total === 1 ? "" : "s"}`;
     headerCell.font = { bold: true };
     headerCell.fill = {
       type: "pattern",
@@ -373,7 +515,7 @@ async function buildCategory(
       fgColor: { argb: "FFE7E0C8" },
     };
     rowIdx++;
-    for (const a of c.athletes) {
+    for (const a of e.athletes) {
       const row = ws.getRow(rowIdx);
       row.values = ["", a.chest_no ?? "", a.full_name ?? "", a.district ?? ""];
       for (let col = 1; col <= 4; col++) {

@@ -1,5 +1,6 @@
 import React from "react";
 import { Document, Page, View, Text, sharedStyles } from "@/lib/pdf/base";
+import { formatCategoryCode } from "@/lib/rules/category-label";
 
 export type CategoryRow = {
   category_code: string;
@@ -28,7 +29,10 @@ export function CategorySheet({
         {categories.map((c) => (
           <View key={c.category_code} wrap={false} style={{ marginBottom: 10 }}>
             <Text style={sharedStyles.h2}>
-              {c.category_code} — {c.athletes.length} athletes
+              {formatCategoryCode(c.category_code)} — {c.athletes.length} athletes
+            </Text>
+            <Text style={{ fontSize: 7, color: "#666", marginBottom: 2 }}>
+              code: {c.category_code}
             </Text>
             <View style={sharedStyles.table}>
               <View style={sharedStyles.thead}>

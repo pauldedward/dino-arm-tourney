@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { enqueueWeighIn, flushQueue } from "@/lib/sync/queue";
+import WeightOverridePicker from "@/components/admin/WeightOverridePicker";
+import type { WeightOverride } from "@/lib/rules/resolve";
 
 /**
  * Weigh-in capture form.
@@ -17,20 +19,30 @@ export default function WeighInForm({
   queueHref,
   currentPhotoUrl,
   isPara,
-  initialBumpUp,
+  reg,
+  initialOverrides,
 }: {
   registrationId: string;
   declared: number | null;
   queueHref: string;
   currentPhotoUrl: string | null;
   isPara: boolean;
-  initialBumpUp: boolean;
+  reg: {
+    gender: "M" | "F" | null;
+    nonpara_classes: string[];
+    nonpara_hands: Array<"R" | "L" | "B" | null>;
+    para_codes: string[];
+    para_hand: "R" | "L" | "B" | null;
+  };
+  initialOverrides: WeightOverride[];
 }) {
   const router = useRouter();
   const [scaleBlob, setScaleBlob] = useState<Blob | null>(null);
   const [athleteBlob, setAthleteBlob] = useState<Blob | null>(null);
   const [kg, setKg] = useState<string>("");
-  const [bumpUp, setBumpUp] = useState<boolean>(initialBumpUp);
+  const [overrides, setOverrides] = useState<WeightOverride[]>(initialOverrides);
+  const overridesChanged =
+    JSON.stringify(overrides) !== JSON.stringify(initialOverrides);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -49,10 +61,9 @@ export default function WeighInForm({
     fd.set("measured_kg", parsed.toFixed(2));
     if (scaleBlob) fd.set("file", scaleBlob, "scale.jpg");
     if (athleteBlob) fd.set("athlete_file", athleteBlob, "athlete.jpg");
-    // Persist the operator's bump choice with the same write so the
-    // resolver picks it up on the very next category-sheet refresh.
-    // Server ignores the field for para entries.
-    if (!isPara) fd.set("weight_bump_up", bumpUp ? "true" : "false");
+    // Persist the operator's per-entry overrides with the same write so
+    // the resolver picks them up on the very next category-sheet refresh.
+    if (overridesChanged) fd.set("weight_overrides", JSON.stringify(overrides));
 
     if (navigator.onLine) {
       try {
@@ -179,29 +190,36 @@ export default function WeighInForm({
           )}
         </label>
 
-        {!isPara && (
-          <label
-            className={`flex cursor-pointer items-center gap-3 border-2 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.15em] ${
-              bumpUp
-                ? "border-rust bg-rust/10 text-rust"
-                : "border-ink/40 text-ink/70 hover:border-ink"
-            }`}
-            title="Compete one weight class above the resolved one. No-op at the open bucket."
-          >
-            <input
-              type="checkbox"
-              checked={bumpUp}
-              onChange={(e) => setBumpUp(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span className="flex-1">+1 weight class</span>
-            {initialBumpUp !== bumpUp && (
-              <span className="font-mono text-[9px] tracking-normal normal-case text-ink/50">
-                changed
-              </span>
-            )}
-          </label>
-        )}
+        {(() => {
+          const wt = Number(kg);
+          if (!Number.isFinite(wt) || wt <= 0) return null;
+          return (
+            <div className="border-2 border-ink/40 p-2">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.25em] text-ink/60">
+                Weight class
+              </p>
+              <WeightOverridePicker
+                reg={{
+                  gender: reg.gender,
+                  nonpara_classes: reg.nonpara_classes,
+                  nonpara_hands: reg.nonpara_hands,
+                  para_codes: reg.para_codes,
+                  para_hand: reg.para_hand,
+                  weight_overrides: overrides,
+                }}
+                weightKg={wt}
+                value={overrides}
+                onChange={setOverrides}
+                compact
+              />
+              {overridesChanged && (
+                <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-rust">
+                  picks changed — will save with weigh-in
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         <button
           type="submit"

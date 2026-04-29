@@ -132,8 +132,9 @@ export async function POST(
   const nowVerified = newCollected >= (existing.amount_inr ?? 0) && (existing.amount_inr ?? 0) > 0;
 
   if (nowVerified) {
-    // Mirror to legacy columns so existing readers (and CSV exports)
-    // see the verified state without joining payment_collections.
+    // Flip payments.status to keep the raw column truthful (it still
+    // gates a few legacy readers); registrations.status is no longer
+    // mirrored — readers go through payment_summary.derived_status.
     await svc
       .from("payments")
       .update({
@@ -145,14 +146,6 @@ export async function POST(
       })
       .eq("id", id)
       .neq("status", "verified");
-
-    if (existing.registration_id) {
-      await svc
-        .from("registrations")
-        .update({ status: "paid" })
-        .eq("id", existing.registration_id)
-        .eq("status", "pending");
-    }
   } else if (reference) {
     // Carry the latest reference forward even for a partial.
     await svc.from("payments").update({ notes: reference }).eq("id", id);

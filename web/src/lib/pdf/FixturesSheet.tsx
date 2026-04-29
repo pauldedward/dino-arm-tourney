@@ -1,5 +1,6 @@
 import React from "react";
 import { Document, Page, View, Text, sharedStyles } from "@/lib/pdf/base";
+import { formatCategoryCode } from "@/lib/rules/category-label";
 
 export type BracketSide = "W" | "L" | "GF";
 
@@ -98,9 +99,9 @@ export function FixturesSheet({
       {categories.map((cat) => (
         <Page key={cat.category_code} size="A4" style={sharedStyles.page}>
           <Text style={sharedStyles.h1}>{event.name}</Text>
-          <Text style={sharedStyles.h2}>{cat.category_code}</Text>
+          <Text style={sharedStyles.h2}>{formatCategoryCode(cat.category_code)}</Text>
           <Text style={{ fontSize: 7, color: "#666", marginBottom: 4 }}>
-            Tick the winner box, write the advancing name on the next round&apos;s blank line.
+            code: {cat.category_code} · Tick the winner box, write the advancing name on the next round&apos;s blank line.
           </Text>
           {cat.sides.map((s) => {
             const totalRounds = s.rounds.length;

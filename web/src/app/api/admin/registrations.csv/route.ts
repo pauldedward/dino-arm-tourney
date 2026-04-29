@@ -20,17 +20,28 @@ export async function GET(req: NextRequest) {
   const q = sp.get("q") ?? "";
   const division = sp.get("division") ?? "";
   const status = sp.get("status") ?? "";
+  // Optional lifecycle / discipline / checkin filters — each is
+  // single-axis. `status` is kept for back-compat with old bookmarks.
+  const lifecycle = sp.get("lifecycle") ?? "";
+  const discipline = sp.get("discipline") ?? "";
+  const checkin = sp.get("checkin") ?? "";
 
   const svc = createServiceClient();
   let query = svc
     .from("registrations")
     .select(
-      "id, chest_no, full_name, initial, dob, division, district, team, mobile, declared_weight_kg, weight_class_code, youth_hand, senior_hand, status, checkin_status, created_at, event_id, events(name, slug), payments(amount_inr, status, utr)"
+      "id, chest_no, full_name, initial, dob, division, district, team, mobile, declared_weight_kg, weight_class_code, youth_hand, senior_hand, status, lifecycle_status, discipline_status, checkin_status, created_at, event_id, events(name, slug), payments(amount_inr, status, utr)"
     )
     .order("chest_no", { ascending: true, nullsFirst: false })
     .limit(10000);
   if (eventId) query = query.eq("event_id", eventId);
   if (division) query = query.eq("division", division);
+  if (lifecycle === "active" || lifecycle === "withdrawn")
+    query = query.eq("lifecycle_status", lifecycle);
+  if (discipline === "clear" || discipline === "disqualified")
+    query = query.eq("discipline_status", discipline);
+  if (checkin === "weighed_in" || checkin === "no_show" || checkin === "not_arrived")
+    query = query.eq("checkin_status", checkin);
   if (status) query = query.eq("status", status);
   if (q) {
     query = query.or(`full_name.ilike.%${q}%,mobile.ilike.%${q}%,district.ilike.%${q}%`);
@@ -82,7 +93,8 @@ export async function GET(req: NextRequest) {
     "weight_class",
     "youth_hand",
     "senior_hand",
-    "registration_status",
+    "lifecycle_status",
+    "discipline_status",
     "checkin_status",
     "payment_status",
     "utr",
@@ -112,7 +124,8 @@ export async function GET(req: NextRequest) {
       r.weight_class_code ?? "",
       r.youth_hand ?? "",
       r.senior_hand ?? "",
-      r.status ?? "",
+      (r.lifecycle_status as string | null) ?? "active",
+      (r.discipline_status as string | null) ?? "clear",
       r.checkin_status ?? "",
       s?.derived ?? pay?.status ?? "",
       pay?.utr ?? "",

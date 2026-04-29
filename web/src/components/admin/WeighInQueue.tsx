@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PendingLink from "@/components/PendingLink";
 import { isPaid } from "@/lib/payments/status";
+import type { WeightOverride } from "@/lib/rules/resolve";
+import { buildOverrideRows } from "@/lib/rules/weight-overrides";
 
 export type WeighInRow = {
   id: string;
@@ -14,7 +16,16 @@ export type WeighInRow = {
   district: string | null;
   declared_weight_kg: number | null;
   weight_class_code: string | null;
+  gender?: "M" | "F" | null;
+  nonpara_classes?: string[] | null;
+  nonpara_hands?: Array<"R" | "L" | "B" | null> | null;
+  nonpara_hand?: "R" | "L" | "B" | null;
+  para_codes?: string[] | null;
+  para_hand?: "R" | "L" | "B" | null;
+  weight_overrides?: WeightOverride[] | null;
   status?: string | null;
+  lifecycle_status?: "active" | "withdrawn" | null;
+  discipline_status?: "clear" | "disqualified" | null;
   checkin_status?: "not_arrived" | "weighed_in" | "no_show" | null;
   weigh_ins:
     | { id: string; measured_kg: number | null; weighed_at: string | null }[]
@@ -27,6 +38,40 @@ export type WeighInRow = {
 interface Props {
   rows: WeighInRow[];
   eventSlug: string;
+}
+
+/**
+ * Compose a comma-separated label of resolved weight buckets for a row.
+ * Returns null when the row has no entries (e.g. mid-edit), so the caller
+ * can fall back to the legacy `weight_class_code` column.
+ */
+function resolvedClassLabel(r: WeighInRow): string | null {
+  const wt = Number(r.declared_weight_kg);
+  if (!Number.isFinite(wt) || wt <= 0) return null;
+  const rows = buildOverrideRows(
+    {
+      gender: (r.gender as "M" | "F" | null) ?? null,
+      nonpara_classes: r.nonpara_classes ?? [],
+      nonpara_hands:
+        (r.nonpara_hands && r.nonpara_hands.length > 0
+          ? r.nonpara_hands
+          : (r.nonpara_classes ?? []).map(() => r.nonpara_hand ?? null)) ?? [],
+      para_codes: r.para_codes ?? [],
+      para_hand: r.para_hand ?? null,
+      weight_overrides: r.weight_overrides ?? [],
+    },
+    wt
+  );
+  if (rows.length === 0) return null;
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const row of rows) {
+    const key = `${row.scope}|${row.code}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(row.selectedBucket.label + (row.competingUp ? " ↑" : ""));
+  }
+  return parts.join(", ");
 }
 
 /**
@@ -320,7 +365,7 @@ function Section({
                   <td className="px-3 py-2 text-right font-mono tabular-nums">
                     {state === "done"
                       ? wi?.measured_kg ?? "—"
-                      : r.weight_class_code ?? "—"}
+                      : resolvedClassLabel(r) ?? r.weight_class_code ?? "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <PendingLink

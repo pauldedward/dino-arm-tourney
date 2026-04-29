@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   let query = svc
     .from("registrations")
     .select(
-      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, checkin_status, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, payments(id, amount_inr, status, method, utr, proof_url, verified_at, payment_collections(id, amount_inr, method, reversed_at, payer_label))",
+      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, lifecycle_status, discipline_status, checkin_status, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, payments(id, amount_inr, status, method, utr, proof_url, verified_at, payment_collections(id, amount_inr, method, reversed_at, payer_label))",
       { count: "estimated" }
     )
     .order("chest_no", { ascending: true, nullsFirst: false })
@@ -47,12 +47,18 @@ export async function GET(req: NextRequest) {
 
   if (eventId) query = query.eq("event_id", eventId);
   if (division) query = query.eq("division", division);
+  // Lifecycle / discipline filters — each axis is independent.
+  // The combined `entry` filter still supports legacy values for back-compat.
   if (entry === "active") {
-    query = query.not("status", "in", "(withdrawn,disqualified)");
-  } else if (entry === "withdrawn" || entry === "disqualified") {
-    query = query.eq("status", entry);
+    query = query
+      .eq("lifecycle_status", "active")
+      .eq("discipline_status", "clear");
+  } else if (entry === "withdrawn") {
+    query = query.eq("lifecycle_status", "withdrawn");
+  } else if (entry === "disqualified") {
+    query = query.eq("discipline_status", "disqualified");
   } else if (entry) {
-    // Legacy values (pending/paid/weighed_in) — honor for back-compat.
+    // Legacy value (pending/paid/weighed_in) — honor for back-compat.
     query = query.eq("status", entry);
   }
   if (checkin === "weighed_in" || checkin === "no_show" || checkin === "not_arrived") {
@@ -75,6 +81,8 @@ export async function GET(req: NextRequest) {
     rows = rows.filter((r) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const p: any = Array.isArray(r.payments) ? r.payments[0] : null;
+      if (payment === "paid") return !!p && p.status === "verified";
+      if (payment === "non-paid") return !p || p.status !== "verified";
       if (!p) return payment === "pending" || payment === "unpaid";
       if (payment === "unpaid") return p.status === "pending";
       if (payment === "review") return p.status === "pending" && !!p.utr;
@@ -128,7 +136,13 @@ export async function POST(req: NextRequest) {
   if (eventId) query = query.eq("event_id", eventId);
   if (division) query = query.eq("division", division);
   if (entry === "active") {
-    query = query.not("status", "in", "(withdrawn,disqualified)");
+    query = query
+      .eq("lifecycle_status", "active")
+      .eq("discipline_status", "clear");
+  } else if (entry === "withdrawn") {
+    query = query.eq("lifecycle_status", "withdrawn");
+  } else if (entry === "disqualified") {
+    query = query.eq("discipline_status", "disqualified");
   } else if (entry) {
     query = query.eq("status", entry);
   }

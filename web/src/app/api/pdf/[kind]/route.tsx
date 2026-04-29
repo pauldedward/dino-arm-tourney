@@ -11,9 +11,9 @@ import { FixturesSheet, type FixtureRow } from "@/lib/pdf/FixturesSheet";
 import { CashCollectionSheet, type CashDistrict } from "@/lib/pdf/CashCollectionSheet";
 import { PaymentReportSheet } from "@/lib/pdf/PaymentReportSheet";
 import { loadPaymentReport } from "@/lib/sheets/loaders";
+import { buildNominalRows } from "@/lib/sheets/build-nominal";
 import { recordAudit } from "@/lib/audit";
 import { groupRegistrationsByCategory } from "@/lib/registrations/group-by-category";
-import { isPaid, isWeighed } from "@/lib/payments/status";
 import { isFixtureEligible } from "@/lib/registrations/eligibility";
 import type { RegistrationLite } from "@/lib/rules/resolve";
 import { exportFilename } from "@/lib/export/filename";
@@ -123,29 +123,37 @@ async function buildDocument(
 ) {
   switch (kind) {
     case "nominal": {
-      const { data } = await svc
-        .from("registrations")
-        .select(
-          "id, chest_no, full_name, division, district, team, declared_weight_kg, age_categories, status, payments(status), weigh_ins(id)"
-        )
-        .eq("event_id", event.id)
-        .order("full_name", { ascending: true });
-      const rows: NominalRow[] = (data ?? []).map((r) => {
-        const ps = Array.isArray(r.payments) ? r.payments : [];
-        const ws = Array.isArray(r.weigh_ins) ? r.weigh_ins : [];
-        return {
-          chest_no: r.chest_no,
-          full_name: r.full_name,
-          division: r.division,
-          district: r.district,
-          team: r.team,
-          declared_weight_kg: r.declared_weight_kg,
-          age_categories: r.age_categories as string[] | null,
-          status: r.status,
-          paid: isPaid(r.status, ps),
-          weighed: isWeighed(r.status, ws),
-        };
-      });
+      // Use the shared loader so the PDF nominal sheet is built from
+      // identical inputs as the operator console (payment_summary +
+      // weigh_ins + new lifecycle/discipline columns).
+      const [regsRes, sumsRes, wisRes] = await Promise.all([
+        svc
+          .from("registrations")
+          .select(
+            "id, chest_no, full_name, gender, dob, mobile, division, district, team, declared_weight_kg, age_categories, para_codes, para_hand, nonpara_classes, nonpara_hands, nonpara_hand, weight_overrides, status, lifecycle_status, discipline_status, checkin_status"
+          )
+          .eq("event_id", event.id)
+          .order("full_name", { ascending: true }),
+        svc
+          .from("payment_summary")
+          .select("registration_id, derived_status")
+          .eq("event_id", event.id),
+        svc
+          .from("weigh_ins")
+          .select("registration_id, measured_kg, registrations!inner(event_id)")
+          .eq("registrations.event_id", event.id),
+      ]);
+      const rows = buildNominalRows(
+        regsRes.data ?? [],
+        (sumsRes.data ?? []).map((s) => ({
+          registration_id: s.registration_id as string,
+          derived_status: s.derived_status as string,
+        })),
+        (wisRes.data ?? []).map((w) => ({
+          registration_id: w.registration_id as string,
+          measured_kg: (w.measured_kg as number | null) ?? null,
+        })),
+      );
       return <NominalSheet event={{ name: event.name }} rows={rows} />;
     }
 
@@ -165,7 +173,7 @@ async function buildDocument(
         svc
           .from("registrations")
           .select(
-            "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_bump_up, status, checkin_status"
+            "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, status, lifecycle_status, discipline_status, checkin_status"
           )
           .eq("event_id", event.id),
         svc
@@ -183,6 +191,8 @@ async function buildDocument(
       const eligibleAll = (regsRes.data ?? []).filter((r) =>
         isFixtureEligible({
           regStatus: r.status,
+          lifecycleStatus: r.lifecycle_status as string | null,
+          disciplineStatus: r.discipline_status as string | null,
           derivedPaymentStatus: derivedByReg.get(r.id as string) ?? null,
           checkinStatus: r.checkin_status as string | null | undefined,
         }),
@@ -220,7 +230,8 @@ async function buildDocument(
             ),
           para_codes: (r.para_codes as string[] | null) ?? [],
           para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
-          weight_bump_up: r.weight_bump_up === true,
+          weight_overrides:
+            (r.weight_overrides as RegistrationLite["weight_overrides"]) ?? null,
         };
         return {
           ...lite,

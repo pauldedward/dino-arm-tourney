@@ -269,13 +269,7 @@ export async function POST(req: NextRequest) {
         .in("id", verifiedIds)
         .neq("status", "verified");
     }
-    if (verifiedRegIds.length > 0) {
-      await svc
-        .from("registrations")
-        .update({ status: "paid" })
-        .in("id", verifiedRegIds)
-        .eq("status", "pending");
-    }
+    // Post-0039: no mirror onto registrations.status.
 
     await Promise.all(
       auditEvents.map((a) =>
@@ -376,13 +370,7 @@ export async function POST(req: NextRequest) {
         .in("id", verifiedIds)
         .neq("status", "verified");
     }
-    if (verifiedRegIds.length > 0) {
-      await svc
-        .from("registrations")
-        .update({ status: "paid" })
-        .in("id", verifiedRegIds)
-        .eq("status", "pending");
-    }
+    // Post-0039: no mirror onto registrations.status.
   } else {
     // reject
     if (pending.length > 0) {

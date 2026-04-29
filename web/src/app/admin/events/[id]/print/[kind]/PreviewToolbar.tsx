@@ -12,7 +12,7 @@ export default function PreviewToolbar({
   totalLabel,
   zipUrl,
 }: {
-  pdfUrl: string;
+  pdfUrl?: string;
   xlsxUrl?: string;
   divisions?: string[];
   categories?: string[];
@@ -41,7 +41,7 @@ export default function PreviewToolbar({
   }
 
   function printNow() {
-    window.open(pdfUrl, "_blank", "noopener");
+    if (pdfUrl) window.open(pdfUrl, "_blank", "noopener");
   }
 
   return (
@@ -93,14 +93,16 @@ export default function PreviewToolbar({
         >
           Print view ⎙
         </button>
-        <button
-          type="button"
-          onClick={printNow}
-          className="border-2 border-ink bg-volt px-3 py-1.5 hover:bg-rust hover:text-paper"
-          title="Open the official branded PDF"
-        >
-          Open PDF ↗
-        </button>
+        {pdfUrl && (
+          <button
+            type="button"
+            onClick={printNow}
+            className="border-2 border-ink bg-volt px-3 py-1.5 hover:bg-rust hover:text-paper"
+            title="Open the official branded PDF"
+          >
+            Open PDF ↗
+          </button>
+        )}
         {xlsxUrl && (
           <a
             href={xlsxUrl}

@@ -1,43 +1,48 @@
 /**
  * "Is this athlete eligible for fixture/category-sheet inclusion?"
  *
- * Replaces the legacy `.in("status", ["paid","weighed_in"])` filter,
- * which under-counted athletes who completed payment via installments
- * (`payment_collections`). Those rows have `payment_summary.derived_status
- * = 'verified'` but the legacy `registrations.status` stays `pending`,
- * because the only writers that flip the mirror are the direct-payment
- * routes, not the collection insert paths.
+ * Post-0039 each axis has its own column. Eligibility is:
  *
- * Eligibility = (paid OR already-weighed-in) AND not-withdrawn-or-DQ'd.
+ *   competing  = lifecycle_status = 'active' AND discipline_status = 'clear'
+ *   paid       = payment_summary.derived_status = 'verified'
+ *   weighed-in = checkin_status = 'weighed_in'
+ *   eligible   = competing AND (paid OR weighed-in)
  *
- *   paid            ← legacy mirror in ('paid','weighed_in')
- *                     OR payment_summary.derived_status = 'verified'
- *   weighed-in      ← legacy mirror = 'weighed_in'
- *                     OR checkin_status = 'weighed_in'
- *   disqualifying   ← lifecycle/discipline status (withdrawn, disqualified)
+ * Pre-0039 callers can still pass the legacy `regStatus` mirror; the
+ * helper falls back to it for `withdrawn` / `disqualified` only.
  */
-import { isPaid, isWeighed } from "@/lib/payments/status";
+import { isPaid, isWeighed, isCompeting } from "@/lib/payments/status";
 
 export interface FixtureEligibilityInput {
-  regStatus: string | null | undefined;
-  derivedPaymentStatus: string | null | undefined;
-  checkinStatus: string | null | undefined;
+  regStatus?: string | null;
+  lifecycleStatus?: string | null;
+  disciplineStatus?: string | null;
+  derivedPaymentStatus?: string | null;
+  checkinStatus?: string | null;
 }
 
 export function isFixtureEligible(input: FixtureEligibilityInput): boolean {
-  const { regStatus, derivedPaymentStatus, checkinStatus } = input;
-  // isPaid handles withdrawn/disqualified suppression already.
-  const synthPayments =
-    derivedPaymentStatus === "verified"
-      ? [{ status: "verified" as const }]
-      : derivedPaymentStatus
-        ? [{ status: derivedPaymentStatus }]
-        : [];
-  const paid = isPaid(regStatus, synthPayments);
+  const {
+    regStatus,
+    lifecycleStatus,
+    disciplineStatus,
+    derivedPaymentStatus,
+    checkinStatus,
+  } = input;
+  if (
+    !isCompeting({
+      lifecycleStatus,
+      disciplineStatus,
+      legacyStatus: regStatus,
+    })
+  ) {
+    return false;
+  }
+  const paid = isPaid(regStatus, null, {
+    lifecycleStatus,
+    disciplineStatus,
+    derivedPaymentStatus,
+  });
   const weighed = isWeighed(regStatus, null, checkinStatus);
-  // Same withdrawn/disqualified guard as isPaid; isWeighed deliberately
-  // doesn't apply it because a DQ'd athlete may still need to appear in
-  // the weigh-in audit trail. For fixture inclusion we exclude them.
-  if (regStatus === "withdrawn" || regStatus === "disqualified") return false;
   return paid || weighed;
 }

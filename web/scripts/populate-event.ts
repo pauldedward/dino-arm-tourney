@@ -860,11 +860,15 @@ async function main() {
   const nominalRows = (regsFinal ?? []).map((r) => ({
     chest_no: r.chest_no,
     full_name: r.full_name,
+    gender: (r as { gender?: string | null }).gender ?? null,
+    dob: (r as { dob?: string | null }).dob ?? null,
+    mobile: (r as { mobile?: string | null }).mobile ?? null,
     division: r.division,
     district: r.district,
     team: r.team,
     declared_weight_kg: r.declared_weight_kg,
     age_categories: r.age_categories as string[] | null,
+    weight_classes: [] as string[],
     status: r.status,
   }));
   await writePdf("nominal.pdf", React.createElement(NominalSheet, { event: eventForPdf, rows: nominalRows }));

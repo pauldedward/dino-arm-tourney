@@ -25,7 +25,15 @@ export interface Job {
   id?: number;
   endpoint: string;
   method: string;
+  /** Multipart parts. Empty array when `body` is set (JSON path). */
   parts: Part[];
+  /**
+   * Optional JSON-encoded request body. When present, the flusher sends
+   * `Content-Type: application/json` with this string as the body, instead
+   * of building a FormData from `parts`. Older queued rows (pre-2026-04-29)
+   * have no `body` field — they fall through to the FormData path.
+   */
+  body?: string;
   createdAt: number;
   attempts: number;
   lastError?: string;
@@ -60,18 +68,25 @@ function partsToFd(parts: Part[]): FormData {
   return fd;
 }
 
-async function add(endpoint: string, method: string, parts: Part[]): Promise<void> {
+async function add(
+  endpoint: string,
+  method: string,
+  parts: Part[],
+  body?: string,
+): Promise<void> {
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).add({
+      const row: Omit<Job, "id"> = {
         endpoint,
         method,
         parts,
         createdAt: Date.now(),
         attempts: 0,
-      });
+      };
+      if (body !== undefined) row.body = body;
+      tx.objectStore(STORE).add(row);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -142,6 +157,19 @@ export async function enqueuePaymentAction(
   await add(`/api/admin/payments/${paymentId}/${action}`, "POST", []);
 }
 
+/**
+ * Queue an arbitrary JSON-bodied write (used for collect / adjust-total /
+ * reverse, all of which take JSON payloads not multipart). Falls into the
+ * same flush loop and same retry/drop policy as the multipart jobs.
+ */
+export async function enqueueJson(
+  endpoint: string,
+  method: string,
+  body: unknown,
+): Promise<void> {
+  await add(endpoint, method, [], JSON.stringify(body ?? null));
+}
+
 export async function queueLength(): Promise<number> {
   try {
     return (await listAll()).length;
@@ -169,11 +197,18 @@ async function runFlush(): Promise<{
   const jobs = await listAll();
   for (const job of jobs) {
     try {
-      const res = await fetch(job.endpoint, {
+      const isJson = typeof job.body === "string";
+      const init: RequestInit = {
         method: job.method,
-        body: partsToFd(job.parts),
         credentials: "include",
-      });
+      };
+      if (isJson) {
+        init.body = job.body!;
+        init.headers = { "Content-Type": "application/json" };
+      } else {
+        init.body = partsToFd(job.parts);
+      }
+      const res = await fetch(job.endpoint, init);
       if (res.ok) {
         await remove(job.id!);
         flushed++;

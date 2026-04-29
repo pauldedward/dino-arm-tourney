@@ -30,12 +30,13 @@ export default async function WeighInQueuePage({
   const { data: rows, error } = await svc
     .from("registrations")
     .select(
-      "id, event_id, chest_no, full_name, initial, division, district, declared_weight_kg, weight_class_code, status, checkin_status, weigh_ins(id, measured_kg, weighed_at), payments(id, status, amount_inr)"
+      "id, event_id, chest_no, full_name, initial, division, district, declared_weight_kg, weight_class_code, status, lifecycle_status, discipline_status, checkin_status, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, weigh_ins(id, measured_kg, weighed_at), payments(id, status, amount_inr)"
     )
     .eq("event_id", eventId)
-    // Lifecycle gate — only active athletes belong in the queue.
-    // Withdrawn/DQ rows are surfaced on the registrations grid instead.
-    .not("status", "in", "(withdrawn,disqualified)")
+    // Lifecycle / discipline gate — only competing athletes belong in
+    // the queue. Withdrawn/DQ rows are surfaced on the registrations grid.
+    .eq("lifecycle_status", "active")
+    .eq("discipline_status", "clear")
     .order("chest_no", { ascending: true, nullsFirst: false })
     .limit(2000);
 

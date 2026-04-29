@@ -1,32 +1,103 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isPaid, isWeighed, paymentDisplay } from "./status";
+import {
+  isPaid,
+  isWeighed,
+  isWithdrawn,
+  isDisqualified,
+  isCompeting,
+  paymentDisplay,
+} from "./status";
+
+describe("isWithdrawn", () => {
+  it("true when lifecycle_status is withdrawn", () => {
+    assert.equal(isWithdrawn("withdrawn"), true);
+  });
+  it("falls back to legacy status when lifecycle is missing", () => {
+    assert.equal(isWithdrawn(null, "withdrawn"), true);
+    assert.equal(isWithdrawn(undefined, "withdrawn"), true);
+  });
+  it("ignores legacy when lifecycle is set explicitly", () => {
+    assert.equal(isWithdrawn("active", "withdrawn"), false);
+  });
+  it("false for active", () => {
+    assert.equal(isWithdrawn("active"), false);
+    assert.equal(isWithdrawn(null, "pending"), false);
+  });
+});
+
+describe("isDisqualified", () => {
+  it("true when discipline_status is disqualified", () => {
+    assert.equal(isDisqualified("disqualified"), true);
+  });
+  it("falls back to legacy status", () => {
+    assert.equal(isDisqualified(null, "disqualified"), true);
+  });
+  it("ignores legacy when discipline is set", () => {
+    assert.equal(isDisqualified("clear", "disqualified"), false);
+  });
+});
+
+describe("isCompeting", () => {
+  it("true for active+clear", () => {
+    assert.equal(
+      isCompeting({ lifecycleStatus: "active", disciplineStatus: "clear" }),
+      true,
+    );
+  });
+  it("false when withdrawn", () => {
+    assert.equal(
+      isCompeting({ lifecycleStatus: "withdrawn", disciplineStatus: "clear" }),
+      false,
+    );
+  });
+  it("false when disqualified", () => {
+    assert.equal(
+      isCompeting({
+        lifecycleStatus: "active",
+        disciplineStatus: "disqualified",
+      }),
+      false,
+    );
+  });
+});
 
 describe("isPaid", () => {
-  it("returns true when any payment row is verified", () => {
+  it("true when payments has verified row", () => {
     assert.equal(isPaid("pending", [{ status: "verified" }]), true);
   });
-  it("returns true when registration.status is paid (legacy)", () => {
-    // Legacy data: a registration may have been flipped to 'paid' before
-    // payments rows existed. Treat as paid until backfill migration.
-    assert.equal(isPaid("paid", []), true);
+  it("true when derivedPaymentStatus is verified", () => {
+    assert.equal(
+      isPaid("pending", [], { derivedPaymentStatus: "verified" }),
+      true,
+    );
   });
-  it("returns true when registration.status is weighed_in (legacy)", () => {
-    assert.equal(isPaid("weighed_in", []), true);
-  });
-  it("returns false when only pending/rejected payments exist", () => {
+  it("false when only pending/rejected payments exist", () => {
     assert.equal(isPaid("pending", [{ status: "pending" }]), false);
     assert.equal(isPaid("pending", [{ status: "rejected" }]), false);
   });
-  it("returns false when no payments and registration is pending", () => {
+  it("false when no payments and no derived", () => {
     assert.equal(isPaid("pending", []), false);
   });
-  it("returns false when registration is withdrawn even if a stale payment is verified", () => {
-    // Withdrawn means the athlete is out — refund handled separately.
-    // Operator dashboards should not show them as paid participants.
+  it("false when withdrawn even with verified payment", () => {
+    assert.equal(
+      isPaid("pending", [{ status: "verified" }], {
+        lifecycleStatus: "withdrawn",
+      }),
+      false,
+    );
+    // Legacy fallback path.
     assert.equal(isPaid("withdrawn", [{ status: "verified" }]), false);
   });
-  it("treats null/undefined payment list as empty", () => {
+  it("false when disqualified", () => {
+    assert.equal(
+      isPaid("pending", [{ status: "verified" }], {
+        disciplineStatus: "disqualified",
+      }),
+      false,
+    );
+  });
+  it("treats null payment list as empty", () => {
     assert.equal(isPaid("pending", null), false);
     assert.equal(isPaid("pending", undefined), false);
   });
@@ -36,20 +107,13 @@ describe("isWeighed", () => {
   it("uses weigh_ins presence as source of truth", () => {
     assert.equal(isWeighed("pending", [{ id: "w1" }]), true);
   });
-  it("falls back to legacy registration.status === weighed_in", () => {
-    assert.equal(isWeighed("weighed_in", []), true);
-    assert.equal(isWeighed("weighed_in", null), true);
-  });
-  it("returns false when no weigh-in row and status is paid", () => {
-    assert.equal(isWeighed("paid", []), false);
-  });
-  it("prefers checkin_status when provided", () => {
-    // checkin_status is the post-0029 source of truth. It must dominate
-    // the legacy registrations.status mirror so a stale/wrong status
-    // value can't keep showing the athlete as weighed-in.
-    assert.equal(isWeighed("weighed_in", [], "not_arrived"), false);
+  it("checkin_status dominates weigh_ins when both present", () => {
+    assert.equal(isWeighed("pending", [{ id: "w1" }], "not_arrived"), false);
     assert.equal(isWeighed("pending", [], "weighed_in"), true);
     assert.equal(isWeighed("pending", null, "no_show"), false);
+  });
+  it("false when no signal at all", () => {
+    assert.equal(isWeighed("pending", []), false);
   });
 });
 

@@ -18,11 +18,14 @@ export const dynamic = "force-dynamic";
  */
 export default async function CounterDeskPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   await requireRole("operator", "/admin/events");
   const { id: idOrSlug } = await params;
+  const sp = await searchParams;
   const ref = await resolveEventRef(idOrSlug);
   if (!ref) redirect("/admin/events?gone=event");
 
@@ -86,6 +89,7 @@ export default async function CounterDeskPage({
         paymentMode={(event.payment_mode as "online_upi" | "offline" | "hybrid" | null) ?? "online_upi"}
         districts={TN_DISTRICTS}
         initialSaved={initialSaved}
+        initialEditId={sp.edit}
       />
     </div>
   );

@@ -8,10 +8,21 @@ import {
   ageOnMatchDay,
   type Hand,
 } from "@/lib/rules/registration-rules";
+import { prettyNonparaClassName } from "@/lib/rules/category-label";
 import CameraCapture from "./CameraCapture";
+import WeightOverridePicker from "./WeightOverridePicker";
+import type { WeightOverride } from "@/lib/rules/resolve";
 import { useConfirm } from "@/components/ConfirmDialog";
 import Spinner from "@/components/Spinner";
 import { loadPendingRows, savePendingRows } from "./bulkPendingStore";
+import {
+  AdjustTotalPopover,
+  CollectPopover,
+  type CollectTarget,
+  UndoCollectPopover,
+} from "./payment/PaymentPopovers";
+import ProofReviewModal from "./ProofReviewModal";
+import { enqueueJson, flushQueue } from "@/lib/sync/queue";
 
 // Feature flag — counter desk currently doesn't ask the operator for a UTR or
 // payment-proof image (offline cash/UPI is taken on trust at the counter).
@@ -29,6 +40,10 @@ export interface SavedRow {
   declared_weight_kg: number | null;
   weight_class_code: string | null;
   payment_status?: string | null;
+  /** Live id of the payments row joined to this registration, for collect /
+   *  adjust / reverse popovers. May be null for rows created before a
+   *  payment was instantiated. */
+  payment_id?: string | null;
   paid_amount_inr?: number | null;
   total_fee_inr?: number | null;
   collected_inr?: number | null;
@@ -42,7 +57,13 @@ export interface SavedRow {
   saved_at: number;
   // Optimistic-sync metadata. Existing (server-loaded) rows omit these.
   client_id?: string;
-  status?: "syncing" | "saved" | "error";
+  /**
+   * - syncing: in-flight POST/DELETE
+   * - saved: server confirmed
+   * - error: failed with a 4xx the operator must fix (validation, duplicate, etc.)
+   * - queued: network unreachable, IDB queue will retry on its own
+   */
+  status?: "syncing" | "saved" | "error" | "queued";
   error?: string;
   // Snapshot of the POST body so we can retry on error without
   // re-typing the whole form.
@@ -93,9 +114,9 @@ interface Draft {
 
   approve_weighin: boolean;
 
-  /** Non-para opt-in: place the entry one weight bucket above the
-   *  one the weight resolves to. Ignored in para mode. */
-  weight_bump_up: boolean;
+  /** Per-entry weight class overrides. Each entry must point at a
+   *  bucket heavier than the auto bucket; lighter picks ignored. */
+  weight_overrides: WeightOverride[];
 
   photo_key: string | null;
   photo_preview: string | null;
@@ -106,9 +127,24 @@ interface Draft {
   proof_uploading: boolean;
 }
 
+/** Stable identity for matching an optimistic "queued" row against the
+ *  server twin that lands later (after the IDB queue flushes). The
+ *  server-generated uuid won't match the client_id we stored offline,
+ *  so we key on full_name + mobile (10-digit, unique per athlete in
+ *  practice). Returns null if either field is missing. */
+function keyForOptimisticMatch(r: SavedRow): string | null {
+  const name = (r.full_name ?? "").trim().toLowerCase();
+  const mobile =
+    typeof r.payload?.mobile === "string"
+      ? (r.payload.mobile as string).replace(/\D/g, "")
+      : "";
+  if (!name || !mobile) return null;
+  return `${name}::${mobile}`;
+}
+
 function emptyDraft(
   defaultFee: number,
-  defaultMethod: "manual_upi" | "cash" = "manual_upi",
+  defaultMethod: "manual_upi" | "cash" = "cash",
   channel: "online" | "offline" = "offline"
 ): Draft {
   return {
@@ -139,7 +175,7 @@ function emptyDraft(
     payment_utr: "",
     channel,
     approve_weighin: false,
-    weight_bump_up: false,
+    weight_overrides: [],
     photo_key: null,
     photo_preview: null,
     photo_uploading: false,
@@ -171,6 +207,7 @@ export default function BulkRegistrationDesk({
   paymentMode = "online_upi",
   districts,
   initialSaved,
+  initialEditId,
 }: {
   eventId: string;
   eventStartsAt: string;
@@ -181,10 +218,13 @@ export default function BulkRegistrationDesk({
   paymentMode?: "online_upi" | "offline" | "hybrid";
   districts: readonly string[];
   initialSaved: SavedRow[];
+  /** Registration id to auto-load into the editor on first mount. */
+  initialEditId?: string;
 }) {
   const confirm = useConfirm();
-  const defaultMethod: "manual_upi" | "cash" =
-    paymentMode === "offline" ? "cash" : "manual_upi";
+  // Cash is the default at the counter regardless of paymentMode — operators
+  // can flip to manual_upi per row.
+  const defaultMethod: "manual_upi" | "cash" = "cash";
   const effectiveOfflineFee = offlineFee ?? defaultFee;
   const [draft, setDraft] = useState<Draft>(() =>
     emptyDraft(effectiveOfflineFee, defaultMethod, "offline")
@@ -222,18 +262,93 @@ export default function BulkRegistrationDesk({
   const [query, setQuery] = useState("");
   const [payFilter, setPayFilter] = useState<"" | "paid" | "non-paid">("");
   const [checkinFilter, setCheckinFilter] = useState<
-    "" | "weighed-in" | "not-weighed-in"
+    "" | "not-arrived" | "weighed-in" | "no-show"
   >("");
   const [searching, setSearching] = useState(false);
   const [eventTotal, setEventTotal] = useState<number | null>(null);
+  // Bumped on a 30s interval and on tab focus. Sidebar fetch effect
+  // depends on it so payment status / collected totals stay live when
+  // another desk verifies a row this operator is also looking at.
+  const [refreshTick, setRefreshTick] = useState(0);
+  // Soft cursor for sidebar j/k navigation. `null` = no cursor (the
+  // initial state before the operator presses j/k for the first time).
+  // Tracked through a ref so the global keydown listener (registered
+  // once with empty deps) can read the latest value without
+  // re-subscribing on every change.
+  const [cursorIdx, setCursorIdx] = useState<number | null>(null);
+  const cursorIdxRef = useRef<number | null>(null);
+  useEffect(() => {
+    cursorIdxRef.current = cursorIdx;
+  }, [cursorIdx]);
+  // Same trick for the flat row list and loadRow — the keydown listener
+  // needs the freshest snapshot, but we don't want to re-bind on every
+  // render of the saved list.
+  const sidebarFlatRef = useRef<SavedRow[]>([]);
+  const loadRowRef = useRef<(clientId: string) => Promise<void>>(
+    async () => {},
+  );
+  // Payment-action popover targets. Counter desk only operates on one
+  // sidebar row at a time, so we never hold the bulk variant of the
+  // collect target — the table is the place for bulk pool-collect.
+  const [collectTarget, setCollectTarget] = useState<CollectTarget | null>(
+    null,
+  );
+  const [adjustTarget, setAdjustTarget] = useState<{
+    paymentId: string;
+    currentTotal: number;
+    collected: number;
+    label: string;
+  } | null>(null);
+  const [undoTarget, setUndoTarget] = useState<{
+    paymentId: string;
+    collected: number;
+    label: string;
+  } | null>(null);
+  // Open proof-viewer dialog. The counter desk uses readonly mode so an
+  // operator can re-check the proof they just uploaded (or one attached
+  // to a row they loaded for edit) without verifying from the intake
+  // screen — verification still flows through Registrations.
+  const [proofViewer, setProofViewer] = useState<{
+    paymentId: string;
+    label: string;
+    status: string;
+  } | null>(null);
+  // Tiny inline toast for payment-action results (success + error). The
+  // counter desk has no toast system; this gets the operator the minimal
+  // confirmation they need without yanking focus.
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const id = window.setTimeout(() => setFlash(null), 3500);
+    return () => window.clearTimeout(id);
+  }, [flash]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    // Skip auto-refresh while the user is actively typing in any input
+    // (we'd be re-fetching mid-edit and disturbing the form). The tick
+    // still advances; the fetcher just no-ops via a ref check.
+    const tick = () => setRefreshTick((n) => n + 1);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    const id = window.setInterval(tick, 30_000);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", tick);
+    };
+  }, []);
 
   // Fetch the right-rail list. Debounced so typing doesn't fire per
   // keystroke. Server-loaded rows are tagged with `saved_at: 0`; session
   // rows from a fresh save carry the real Date.now() — that's how we
   // tell them apart and avoid clobbering in-flight optimistic work.
   useEffect(() => {
-    if (initialSaved.length > 0 && !query && !payFilter && !checkinFilter) return;
+    if (initialSaved.length > 0 && !query && !payFilter && !checkinFilter)
+      return;
     let cancelled = false;
     setSearching(true);
     const handle = window.setTimeout(
@@ -255,12 +370,25 @@ export default function BulkRegistrationDesk({
             if (!j?.rows) return;
             if (typeof j.total === "number") setEventTotal(j.total);
             setSaved((prev) => {
-              const sessionRows = prev.filter((r) => (r.saved_at ?? 0) > 0);
-              const sessionIds = new Set(sessionRows.map((r) => r.id));
-              const fetched = (j.rows as SavedRow[]).filter(
-                (r) => !sessionIds.has(r.id)
+              // Drop "queued" optimistic rows whose server twin has now
+              // landed. Match on full_name + mobile (10-digit, unique
+              // per athlete in practice) since the server-generated uuid
+              // won't match the client_id we stored offline.
+              const fetched = j.rows as SavedRow[];
+              const fetchedKeys = new Set(
+                fetched
+                  .map((r) => keyForOptimisticMatch(r))
+                  .filter((k): k is string => !!k)
               );
-              return [...sessionRows, ...fetched];
+              const sessionRows = prev.filter((r) => {
+                if ((r.saved_at ?? 0) === 0) return false;
+                if (r.status !== "queued") return true;
+                const k = keyForOptimisticMatch(r);
+                return !k || !fetchedKeys.has(k);
+              });
+              const sessionIds = new Set(sessionRows.map((r) => r.id));
+              const merged = fetched.filter((r) => !sessionIds.has(r.id));
+              return [...sessionRows, ...merged];
             });
           })
           .catch(() => {
@@ -273,7 +401,58 @@ export default function BulkRegistrationDesk({
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [eventId, query, payFilter, checkinFilter, initialSaved.length]);
+  }, [
+    eventId,
+    query,
+    payFilter,
+    checkinFilter,
+    initialSaved.length,
+    refreshTick,
+  ]);
+
+  // ---- Payment-action handlers ---------------------------------------
+  // These mirror FastRegistrationsTable.performCollect/Adjust/Reverse
+  // but stay single-row only (the counter desk's bulk path is the
+  // initial registration save itself, not collect-by-district). Each
+  // handler tries an online POST first; on network failure it queues
+  // the JSON body via the offline IDB queue so the operator never has
+  // to remember "I did this when WAN was down".
+  const performPaymentAction = useCallback(
+    async (
+      url: string,
+      body: Record<string, unknown>,
+      successMsg: string,
+    ) => {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          setFlash(successMsg);
+          setRefreshTick((n) => n + 1);
+          return;
+        }
+        // 4xx that isn't a transient auth blip is a logical failure and
+        // should not be queued — surface it now so the operator can
+        // correct their input.
+        if (res.status >= 400 && res.status < 500 && res.status !== 401) {
+          const j = (await res.json().catch(() => ({}))) as { error?: string };
+          setFlash(`Failed: ${j.error ?? `HTTP ${res.status}`}`);
+          return;
+        }
+        // 5xx / 401 / network — fall through to enqueue.
+      } catch {
+        // network — fall through to enqueue.
+      }
+      await enqueueJson(url, "POST", body);
+      void flushQueue();
+      setFlash(`${successMsg} (queued — will sync when online)`);
+      setRefreshTick((n) => n + 1);
+    },
+    [],
+  );
 
   // Global hotkey: "/" or Ctrl/Cmd+K focuses the right-rail search.
   // Skip when the user is already typing in another input/textarea.
@@ -292,6 +471,36 @@ export default function BulkRegistrationDesk({
       if (e.key === "/" && !inField) {
         e.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+      // ---- Sidebar cursor navigation -------------------------------
+      // j/k step a soft cursor through the visible sidebar rows;
+      // Enter / `e` load the cursored row into the form. Disabled
+      // while typing so we don't hijack search input. Operators can
+      // still load a row by clicking it — these keys just give them a
+      // mouse-free path that mirrors the registrations table's j/k
+      // behaviour.
+      if (inField) return;
+      const flat = sidebarFlatRef.current;
+      const loadFn = loadRowRef.current;
+      if (flat.length === 0) return;
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setCursorIdx((idx) =>
+          idx === null ? 0 : Math.min(flat.length - 1, idx + 1),
+        );
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setCursorIdx((idx) =>
+          idx === null ? 0 : Math.max(0, idx - 1),
+        );
+      } else if (e.key === "Enter" || e.key === "e") {
+        const idx = cursorIdxRef.current;
+        if (idx === null) return;
+        const row = flat[idx];
+        if (!row?.client_id) return;
+        e.preventDefault();
+        void loadFn(row.client_id);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -403,6 +612,16 @@ export default function BulkRegistrationDesk({
   // Online and offline registrations may use different per-hand rates.
   const perHandFee = draft.channel === "online" ? defaultFee : effectiveOfflineFee;
   const suggestedTotal = Math.max(entryCount, 1) * perHandFee;
+  // Currently-loaded sidebar row (when in edit mode). Source of payment
+  // metadata — payment_id, payment_status — that the draft itself
+  // doesn't carry. `null` during fresh-draft entry.
+  const editingRow = useMemo(
+    () =>
+      editingClientId
+        ? saved.find((r) => r.client_id === editingClientId) ?? null
+        : null,
+    [editingClientId, saved],
+  );
   const totalFee = Math.max(0, Number(draft.total_fee_inr) || 0);
   const paidNum = Number(draft.paid_amount_inr) || 0;
   const pendingFee = Math.max(0, totalFee - paidNum);
@@ -534,6 +753,25 @@ export default function BulkRegistrationDesk({
           headers: { "content-type": "application/json" },
           body: JSON.stringify(merged),
         });
+        // 5xx and 401 are transient enough to be worth queueing for the
+        // background flush — instead of holding the operator hostage to
+        // their flaky WAN, treat the row as queued so they can move on.
+        if (!res.ok && (res.status >= 500 || res.status === 401)) {
+          await enqueueJson(
+            "/api/admin/registrations/bulk-row",
+            "POST",
+            merged,
+          );
+          void flushQueue();
+          setSaved((rs) =>
+            rs.map((r) =>
+              r.client_id === clientId
+                ? { ...r, status: "queued", error: undefined, payload: merged }
+                : r
+            )
+          );
+          return;
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         setSaved((rs) =>
@@ -551,6 +789,28 @@ export default function BulkRegistrationDesk({
           )
         );
       } catch (err) {
+        // True network failure (fetch threw — DNS, offline, TLS, etc.).
+        // Distinguish from the 4xx "the server said no" path by trying
+        // to enqueue. The IDB write is local; if even THAT fails (e.g.
+        // QuotaExceeded) fall back to the in-memory error+retry path.
+        try {
+          await enqueueJson(
+            "/api/admin/registrations/bulk-row",
+            "POST",
+            merged,
+          );
+          void flushQueue();
+          setSaved((rs) =>
+            rs.map((r) =>
+              r.client_id === clientId
+                ? { ...r, status: "queued", error: undefined, payload: merged }
+                : r
+            )
+          );
+          return;
+        } catch {
+          // fall through
+        }
         const msg = err instanceof Error ? err.message : "save failed";
         setSaved((rs) =>
           rs.map((r) =>
@@ -688,7 +948,9 @@ export default function BulkRegistrationDesk({
         payment_utr: (p.payment_utr as string) ?? "",
         channel: p.channel === "online" ? "online" : "offline",
         approve_weighin: Boolean(p.approve_weighin),
-        weight_bump_up: Boolean(p.weight_bump_up),
+        weight_overrides: Array.isArray(p.weight_overrides)
+          ? (p.weight_overrides as WeightOverride[])
+          : [],
         photo_key: (p.photo_key as string) ?? null,
         photo_preview: null,
         photo_uploading: false,
@@ -709,6 +971,106 @@ export default function BulkRegistrationDesk({
     },
     [defaultMethod, newDraftId]
   );
+
+  // Keep the keydown listener's loadRow reference current.
+  useEffect(() => {
+    loadRowRef.current = loadRow;
+  }, [loadRow]);
+
+  // Auto-load a registration into the editor when the page is opened
+  // with `?edit=<regId>` (from the registrations table "Edit" hover
+  // button). Fetches the payload directly and injects a fully-hydrated
+  // row into `saved` so the recent-bulk merge can't wipe it (session
+  // rows with saved_at > 0 are preserved). Runs once on mount.
+  const initialEditDoneRef = useRef(false);
+  useEffect(() => {
+    if (initialEditDoneRef.current) return;
+    if (!initialEditId) return;
+    initialEditDoneRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/registrations/${initialEditId}?reveal=aadhaar`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const j = (await res.json()) as {
+          payload: Record<string, unknown>;
+          chest_no?: number | null;
+        };
+        if (cancelled) return;
+        const clientId = initialEditId;
+        const hydrated: SavedRow = {
+          id: initialEditId,
+          full_name: (j.payload.full_name as string) ?? null,
+          initial: (j.payload.initial as string) ?? null,
+          chest_no: j.chest_no ?? null,
+          district: (j.payload.district as string) ?? null,
+          team: (j.payload.team as string) ?? null,
+          declared_weight_kg:
+            (j.payload.declared_weight_kg as number) ?? null,
+          weight_class_code: null,
+          approved: false,
+          // Tag as a session row (saved_at > 0) so the periodic
+          // recent-bulk refetch's merge step preserves it.
+          saved_at: Date.now(),
+          client_id: clientId,
+          status: "saved",
+          payload: j.payload,
+        };
+        setSaved((rs) => {
+          const without = rs.filter(
+            (r) => r.id !== initialEditId && r.client_id !== clientId
+          );
+          return [hydrated, ...without];
+        });
+        // Mutate savedRef synchronously so loadRow's lookup can't miss
+        // the row before React has re-rendered (setSaved is async).
+        const withoutNow = savedRef.current.filter(
+          (r) => r.id !== initialEditId && r.client_id !== clientId
+        );
+        savedRef.current = [hydrated, ...withoutNow];
+        await loadRow(clientId);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? `failed to load row for editing: ${err.message}`
+              : "failed to load row for editing"
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialEditId, loadRow]);
+
+  // Pre-compute the flat sidebar list (session rows first, then server
+  // rows) so j/k can step through it. Updated on every change to
+  // `saved`. Same ordering used by the JSX render below.
+  const sidebarSession = useMemo(
+    () => saved.filter((r) => (r.saved_at ?? 0) > 0),
+    [saved],
+  );
+  const sidebarServer = useMemo(
+    () => saved.filter((r) => (r.saved_at ?? 0) === 0),
+    [saved],
+  );
+  const sidebarFlat = useMemo(
+    () => [...sidebarSession, ...sidebarServer],
+    [sidebarSession, sidebarServer],
+  );
+  useEffect(() => {
+    sidebarFlatRef.current = sidebarFlat;
+    // Clamp the cursor when rows shrink; null stays null.
+    setCursorIdx((idx) => {
+      if (idx === null) return null;
+      if (sidebarFlat.length === 0) return null;
+      return Math.min(idx, sidebarFlat.length - 1);
+    });
+  }, [sidebarFlat]);
 
   const cancelEdit = useCallback(() => {
     setEditingClientId(null);
@@ -738,11 +1100,39 @@ export default function BulkRegistrationDesk({
           const res = await fetch(`/api/admin/registrations/${row.id}`, {
             method: "DELETE",
           });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok && (res.status >= 500 || res.status === 401)) {
+            // Transient — queue and stay optimistic.
+            await enqueueJson(
+              `/api/admin/registrations/${row.id}`,
+              "DELETE",
+              null,
+            );
+            void flushQueue();
+            return;
+          }
+          if (!res.ok && res.status !== 404) {
+            throw new Error(`HTTP ${res.status}`);
+          }
         } catch (err) {
-          // Restore the row on failure so nothing silently disappears.
-          setSaved((rs) => [{ ...row, status: "error", error: "delete failed" }, ...rs]);
-          setError(err instanceof Error ? err.message : "delete failed");
+          // True network failure: queue the DELETE for background flush.
+          // 404 already handled above (treat as success — already gone).
+          try {
+            await enqueueJson(
+              `/api/admin/registrations/${row.id}`,
+              "DELETE",
+              null,
+            );
+            void flushQueue();
+            return;
+          } catch {
+            // Local IDB write failed too — restore the row so nothing
+            // silently disappears and surface the error.
+            setSaved((rs) => [
+              { ...row, status: "error", error: "delete failed" },
+              ...rs,
+            ]);
+            setError(err instanceof Error ? err.message : "delete failed");
+          }
         }
       }
     },
@@ -844,7 +1234,7 @@ export default function BulkRegistrationDesk({
       payment_utr: draft.payment_method === "manual_upi" ? draft.payment_utr.trim() || undefined : undefined,
       payment_proof_key: draft.payment_method === "manual_upi" ? draft.proof_key ?? undefined : undefined,
       approve_weighin: draft.approve_weighin,
-      weight_bump_up: draft.mode === "nonpara" ? draft.weight_bump_up : false,
+      weight_overrides: draft.weight_overrides,
       channel: draft.channel,
     };
 
@@ -891,11 +1281,33 @@ export default function BulkRegistrationDesk({
         rs.map((r) => (r.client_id === editingClientId ? optimistic : r))
       );
       // Background DELETE of the old server row (if any), then POST new.
+      // Use the offline queue so a flaky WAN doesn't leave the DELETE
+      // un-replayed (otherwise the operator sees two rows after sync).
       if (prev && prev.id && prev.status === "saved") {
-        void fetch(`/api/admin/registrations/${prev.id}`, { method: "DELETE" })
-          .catch(() => {
-            // Don't surface — worst case the DELETE failed and the user
-            // sees two rows for one athlete. Edit retry is still safe.
+        const oldId = prev.id;
+        void fetch(`/api/admin/registrations/${oldId}`, { method: "DELETE" })
+          .then(async (res) => {
+            if (!res.ok && res.status !== 404) {
+              await enqueueJson(
+                `/api/admin/registrations/${oldId}`,
+                "DELETE",
+                null,
+              );
+              void flushQueue();
+            }
+          })
+          .catch(async () => {
+            try {
+              await enqueueJson(
+                `/api/admin/registrations/${oldId}`,
+                "DELETE",
+                null,
+              );
+              void flushQueue();
+            } catch {
+              // IDB unavailable — best effort; the new POST still goes
+              // through and the operator can clean up the duplicate later.
+            }
           });
       }
       setEditingClientId(null);
@@ -905,14 +1317,25 @@ export default function BulkRegistrationDesk({
       void submitRow(clientId, body, pending);
     }
 
-    // Reset for next athlete — keep affiliation + district/team + fee
-    // sticky (operators usually run one district at a time).
+    // Reset for next athlete — keep affiliation + district/team, category
+    // (mode + class/hand selections), weighed-in checkbox, and payment
+    // channel + method sticky. Operators usually run one district +
+    // category at a time, so this saves dozens of clicks per session.
     const fresh = emptyDraft(effectiveOfflineFee, defaultMethod, draft.channel);
     fresh.affiliation_kind = draft.affiliation_kind;
     fresh.district = draft.district;
     fresh.team = draft.team;
     fresh.approve_weighin = draft.approve_weighin;
     fresh.payment_method = draft.payment_method;
+    fresh.gender = draft.gender;
+    // Category sticky: mode + class/hand selections carry over.
+    fresh.mode = draft.mode;
+    fresh.primary_class = draft.primary_class;
+    fresh.primary_hand = draft.primary_hand;
+    fresh.also_senior = draft.also_senior;
+    fresh.senior_hand = draft.senior_hand;
+    fresh.para_code = draft.para_code;
+    fresh.para_hand = draft.para_hand;
     setDraft(fresh);
     setTimeout(() => nameInputRef.current?.focus(), 0);
   }, [effectiveOfflineFee, defaultMethod, derivedPaymentStatus, districts, dob, draft, editingClientId, eventId, eventStartsAt, newDraftId, submitRow]);
@@ -1212,25 +1635,54 @@ export default function BulkRegistrationDesk({
               />
               Weighed-in ✓
             </label>
-            {draft.mode === "nonpara" && (
-              <label
-                className={`flex h-9 cursor-pointer items-center gap-2 border-2 px-3 font-mono text-[13px] font-bold uppercase tracking-[0.15em] ${
-                  draft.weight_bump_up
-                    ? "border-rust bg-rust/10 text-rust"
-                    : "border-ink/40 text-ink/70 hover:border-ink"
-                }`}
-                title="Compete one weight class above the one the measured weight resolves to (no-op at the open bucket)."
-              >
-                <input
-                  type="checkbox"
-                  checked={draft.weight_bump_up}
-                  onChange={(e) => patch({ weight_bump_up: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                +1 weight class
-              </label>
-            )}
           </div>
+          {(() => {
+            const wt = Number(draft.declared_weight_kg);
+            if (!Number.isFinite(wt) || wt <= 0) return null;
+            const npClasses =
+              draft.mode === "nonpara"
+                ? [
+                    ...(draft.primary_class ? [draft.primary_class] : []),
+                    ...(draft.also_senior ? ["SENIOR"] : []),
+                  ]
+                : [];
+            const npHands: Array<"R" | "L" | "B" | null> =
+              draft.mode === "nonpara"
+                ? [
+                    ...(draft.primary_class
+                      ? [(draft.primary_hand as "R" | "L" | "B") || null]
+                      : []),
+                    ...(draft.also_senior
+                      ? [(draft.senior_hand as "R" | "L" | "B") || null]
+                      : []),
+                  ]
+                : [];
+            const paraCodes =
+              draft.mode === "para" && draft.para_code ? [draft.para_code] : [];
+            const paraHand: "R" | "L" | "B" | null =
+              draft.mode === "para" ? ((draft.para_hand as "R" | "L" | "B") || null) : null;
+            return (
+              <div className="border border-ink/20 bg-paper p-2">
+                <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.25em] text-ink/60">
+                  Weight class
+                </p>
+                <WeightOverridePicker
+                  reg={{
+                    gender: draft.gender === "" ? null : draft.gender,
+                    nonpara_classes: npClasses,
+                    nonpara_hands: npHands,
+                    para_codes: paraCodes,
+                    para_hand: paraHand,
+                    weight_overrides: draft.weight_overrides,
+                  }}
+                  weightKg={wt}
+                  value={draft.weight_overrides}
+                  onChange={(v) => patch({ weight_overrides: v })}
+                  compact
+                />
+              </div>
+            );
+          })()}
 
           {draft.mode === "nonpara" ? (
             <>
@@ -1245,7 +1697,7 @@ export default function BulkRegistrationDesk({
                     <option value="">{allowedNonPara.length === 0 ? "set DOB + gender" : "–"}</option>
                     {allowedNonPara.map((c) => (
                       <option key={c.className} value={c.className}>
-                        {c.className}
+                        {prettyNonparaClassName(c.classFull)}
                       </option>
                     ))}
                   </select>
@@ -1265,7 +1717,7 @@ export default function BulkRegistrationDesk({
                         patch({ also_senior: e.target.checked, senior_hand: "" })
                       }
                     />
-                    Also enter <b>SENIOR</b> (compete-up). Different hand allowed.
+                    Also enter <b>Senior</b> (compete-up). Different hand allowed.
                   </label>
                   {draft.also_senior && (
                     <Field label="Senior hand" w="w-48">
@@ -1398,7 +1850,7 @@ export default function BulkRegistrationDesk({
             </span>
             {(
               [
-                { value: "offline", label: "Offline", fee: effectiveOfflineFee },
+                { value: "offline", label: "Counter", fee: effectiveOfflineFee },
                 { value: "online", label: "Online", fee: defaultFee },
               ] as const
             ).map((c) => {
@@ -1572,35 +2024,86 @@ export default function BulkRegistrationDesk({
           </div>
           {SHOW_UPI_PROOF_UI && (draft.payment_method === "manual_upi" ? (
           <div className="flex items-center gap-3">
-            {draft.proof_preview ? (
-              <img
-                src={draft.proof_preview}
-                alt="proof"
-                className="h-20 w-28 border-2 border-ink object-cover"
-              />
+            {draft.proof_preview || draft.proof_key ? (
+              draft.proof_preview ? (
+                <img
+                  src={draft.proof_preview}
+                  alt="proof"
+                  className="h-20 w-28 border-2 border-ink object-cover"
+                />
+              ) : (
+                // Loaded an existing row: we have proof_key on the
+                // server but no client-side preview. Show a placeholder
+                // tile so the operator knows there *is* a proof; click
+                // View to open the readonly review modal.
+                <div className="flex h-20 w-28 items-center justify-center border-2 border-ink bg-kraft/30 font-mono text-[12px] uppercase tracking-[0.15em] text-ink/70">
+                  📎 attached
+                </div>
+              )
             ) : (
               <div className="flex h-20 w-28 items-center justify-center border-2 border-dashed border-ink/40 font-mono text-[12px] uppercase text-ink/40">
                 no proof
               </div>
             )}
             <div className="flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={() => setCam("proof")}
-                className="border-2 border-ink px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
-              >
-                📷 capture proof
-              </button>
-              <FileFallback
-                onPick={(b) => upload("proof", b)}
-                label="📁 file (img/pdf)"
-                accept="image/*,application/pdf"
-              />
-              {draft.proof_uploading && (
-                <Spinner variant="inline" label="Uploading" />
-              )}
-              {draft.proof_key && !draft.proof_uploading && (
-                <span className="font-mono text-[12px] uppercase text-moss">✓ ready</span>
+              {draft.proof_key && !draft.proof_uploading ? (
+                // Post-upload (fresh capture or loaded row). Offer
+                // View (readonly review) when we have a payment id, and
+                // Replace which clears the existing key/preview and
+                // re-opens the capture flow.
+                <>
+                  <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-moss">
+                    ✓ proof attached
+                  </span>
+                  <div className="flex gap-1">
+                    {editingRow?.payment_id ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProofViewer({
+                            paymentId: editingRow.payment_id!,
+                            label: `${editingRow.initial ? `${editingRow.initial}. ` : ""}${editingRow.full_name ?? "athlete"}`,
+                            status: editingRow.payment_status ?? "pending",
+                          })
+                        }
+                        className="border-2 border-ink px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] hover:bg-ink hover:text-bone"
+                      >
+                        view
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Drop the existing key/preview so the next
+                        // capture uploads cleanly and the form's
+                        // payment_proof_key carries the new one.
+                        patch({ proof_key: null, proof_preview: null });
+                        setCam("proof");
+                      }}
+                      className="border-2 border-ink/40 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-ink/70 hover:border-ink hover:text-ink"
+                    >
+                      replace
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCam("proof")}
+                    className="border-2 border-ink px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
+                  >
+                    📷 capture proof
+                  </button>
+                  <FileFallback
+                    onPick={(b) => upload("proof", b)}
+                    label="📁 file (img/pdf)"
+                    accept="image/*,application/pdf"
+                  />
+                  {draft.proof_uploading && (
+                    <Spinner variant="inline" label="Uploading" />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1784,8 +2287,9 @@ export default function BulkRegistrationDesk({
               {(
                 [
                   ["", "All"],
-                  ["weighed-in", "Checked-in"],
-                  ["not-weighed-in", "Not checked-in"],
+                  ["not-arrived", "Not arrived"],
+                  ["weighed-in", "Weighed-in"],
+                  ["no-show", "No-show"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -1831,12 +2335,8 @@ export default function BulkRegistrationDesk({
           ) : (
             <ul className="max-h-[72vh] space-y-2 overflow-y-auto pr-1">
               {(() => {
-                const sessionRows = saved.filter(
-                  (r) => (r.saved_at ?? 0) > 0
-                );
-                const serverRows = saved.filter(
-                  (r) => (r.saved_at ?? 0) === 0
-                );
+                const sessionRows = sidebarSession;
+                const serverRows = sidebarServer;
                 const renderGroupHeader = (label: string, n: number) => (
                   <li
                     key={`hdr-${label}`}
@@ -1845,45 +2345,38 @@ export default function BulkRegistrationDesk({
                     {label} · {n}
                   </li>
                 );
-                const renderRow = (r: SavedRow) => {
+                const renderRow = (r: SavedRow, flatIdx: number) => {
                   const status = r.status ?? "saved";
                   const isEditing = editingClientId === r.client_id;
+                  const isCursor = flatIdx === cursorIdx;
                   const borderTone = isEditing
                     ? "border-rust"
+                    : isCursor
+                    ? "border-ink"
                     : status === "error"
                     ? "border-rust"
+                    : status === "queued"
+                    ? "border-gold"
                     : status === "syncing"
                     ? "border-ink/50"
                     : "border-ink/30";
-                  const canClickToEdit =
-                    !isEditing && status === "saved" && !!r.client_id;
                   return (
                     <li
                       key={r.client_id ?? r.id}
+                      ref={(el) => {
+                        // Auto-scroll the cursored row into view so j/k
+                        // navigation past the viewport feels native.
+                        if (isCursor && el) {
+                          el.scrollIntoView({ block: "nearest" });
+                        }
+                      }}
                       className={`group flex items-start justify-between gap-2 border ${borderTone} bg-bone p-2 transition-colors ${
                         isEditing
                           ? "bg-rust/5"
-                          : canClickToEdit
-                          ? "cursor-pointer hover:border-ink hover:bg-ink/[0.03]"
+                          : isCursor
+                          ? "bg-kraft/20"
                           : ""
                       }`}
-                      onClick={
-                        canClickToEdit
-                          ? () => void loadRow(r.client_id!)
-                          : undefined
-                      }
-                      role={canClickToEdit ? "button" : undefined}
-                      tabIndex={canClickToEdit ? 0 : undefined}
-                      onKeyDown={
-                        canClickToEdit
-                          ? (e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                void loadRow(r.client_id!);
-                              }
-                            }
-                          : undefined
-                      }
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-display text-sm font-black tracking-tight">
@@ -1935,6 +2428,14 @@ export default function BulkRegistrationDesk({
                             className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50"
                           >
                             ⟳ sync
+                          </span>
+                        )}
+                        {status === "queued" && (
+                          <span
+                            title="Saved locally — will sync when network returns"
+                            className="font-mono text-[12px] uppercase tracking-[0.2em] text-gold"
+                          >
+                            ↑ queued
                           </span>
                         )}
                         {status === "saved" && !isEditing && (
@@ -1989,16 +2490,37 @@ export default function BulkRegistrationDesk({
                             </button>
                           </div>
                         )}
+                        {!isEditing && r.payment_id ? (
+                          <RowPaymentActions
+                            row={r}
+                            onCollect={(t) => setCollectTarget(t)}
+                            onAdjust={(t) => setAdjustTarget(t)}
+                            onUndo={(t) => setUndoTarget(t)}
+                          />
+                        ) : null}
                       </div>
                     </li>
                   );
                 };
                 const out: React.ReactNode[] = [];
-                if (sessionRows.length > 0) {
+                // "This session" stays pinned even when empty so the
+                // operator always knows where their next save will
+                // land. Helps after page refreshes too — without the
+                // header the empty state looks like the search rail.
+                out.push(
+                  renderGroupHeader("This session", sessionRows.length),
+                );
+                if (sessionRows.length === 0) {
                   out.push(
-                    renderGroupHeader("Just added", sessionRows.length)
+                    <li
+                      key="session-empty"
+                      className="px-2 py-3 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/30"
+                    >
+                      no rows yet — save one to start
+                    </li>,
                   );
-                  for (const r of sessionRows) out.push(renderRow(r));
+                } else {
+                  sessionRows.forEach((r, i) => out.push(renderRow(r, i)));
                 }
                 if (serverRows.length > 0) {
                   out.push(
@@ -2007,7 +2529,9 @@ export default function BulkRegistrationDesk({
                       serverRows.length
                     )
                   );
-                  for (const r of serverRows) out.push(renderRow(r));
+                  serverRows.forEach((r, i) =>
+                    out.push(renderRow(r, sessionRows.length + i)),
+                  );
                 }
                 return out;
               })()}
@@ -2015,8 +2539,9 @@ export default function BulkRegistrationDesk({
           )}
           <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink/40">
             <kbd className="border border-ink/30 px-1">/</kbd> focus search ·{" "}
-            <kbd className="border border-ink/30 px-1">Esc</kbd> clear · click
-            a row to load it
+            <kbd className="border border-ink/30 px-1">j/k</kbd> move ·{" "}
+            <kbd className="border border-ink/30 px-1">Enter</kbd>/<kbd className="border border-ink/30 px-1">e</kbd> load ·{" "}
+            <kbd className="border border-ink/30 px-1">Esc</kbd> clear
           </p>
         </div>
       </aside>
@@ -2032,6 +2557,89 @@ export default function BulkRegistrationDesk({
           if (which) upload(which, blob);
         }}
       />
+
+      {collectTarget && (
+        <CollectPopover
+          target={collectTarget}
+          onClose={() => setCollectTarget(null)}
+          onConfirm={(opts) => {
+            // Counter desk only ever sets a "single"-kind target — bulk
+            // pool-collect lives on the registrations table.
+            if (collectTarget.kind !== "single") return;
+            const paymentId = collectTarget.paymentId;
+            const label = collectTarget.label;
+            setCollectTarget(null);
+            const amount =
+              opts.method === "waiver"
+                ? collectTarget.amount
+                : opts.amountOverride ?? collectTarget.amount;
+            void performPaymentAction(
+              `/api/admin/payments/${paymentId}/collect`,
+              {
+                method: opts.method,
+                amount_inr: amount,
+                waive_remainder: opts.waiveRemainder,
+                reference: opts.reference,
+              },
+              opts.method === "waiver"
+                ? `Waived ₹${collectTarget.amount.toLocaleString("en-IN")} · ${label}`
+                : `Collected ₹${amount.toLocaleString("en-IN")} · ${label}`,
+            );
+          }}
+        />
+      )}
+      {adjustTarget && (
+        <AdjustTotalPopover
+          target={adjustTarget}
+          onClose={() => setAdjustTarget(null)}
+          onConfirm={(opts) => {
+            const t = adjustTarget;
+            setAdjustTarget(null);
+            void performPaymentAction(
+              `/api/admin/payments/${t.paymentId}/adjust-total`,
+              { amount_inr: opts.amountInr, reason: opts.reason },
+              `Total → ₹${opts.amountInr.toLocaleString("en-IN")} · ${t.label}`,
+            );
+          }}
+        />
+      )}
+      {undoTarget && (
+        <UndoCollectPopover
+          target={undoTarget}
+          onClose={() => setUndoTarget(null)}
+          onConfirm={(opts) => {
+            const t = undoTarget;
+            setUndoTarget(null);
+            void performPaymentAction(
+              `/api/admin/payments/${t.paymentId}/reverse`,
+              { reason: opts.reason, all: opts.all },
+              `Reversed${opts.all ? " all" : ""} · ${t.label}`,
+            );
+          }}
+        />
+      )}
+
+      {proofViewer && (
+        <ProofReviewModal
+          paymentId={proofViewer.paymentId}
+          caption={proofViewer.label}
+          initialStatus={proofViewer.status}
+          mode="readonly"
+          onClose={() => setProofViewer(null)}
+        />
+      )}
+
+      {flash && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center"
+        >
+          <div className="pointer-events-auto max-w-md border-2 border-ink bg-bone px-4 py-2 font-mono text-[13px] text-ink shadow-[6px_6px_0_0_rgba(10,27,20,0.85)]">
+            {flash}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2165,6 +2773,104 @@ function CheckinRailPill({ row }: { row: SavedRow }) {
   if (s === "weighed_in") return <Pill tone="green" label="weighed-in" />;
   if (s === "no_show") return <Pill tone="bad" label="no-show" />;
   return null; // not_arrived: keep row quiet
+}
+
+/**
+ * Tiny per-row payment action cluster: a Collect ₹X button (when there
+ * is a remainder to collect) plus a ⋯ menu for Adjust total / Undo
+ * collection. Mirrors the FastRegistrationsTable affordances so an
+ * operator never has to switch screens for routine payment edits made
+ * within the row's first minute on the wire.
+ *
+ * The ⋯ menu uses a native <details> so we don't have to manage open
+ * state per row — clicking another summary collapses the previous one
+ * via the click-outside listener installed below.
+ */
+function RowPaymentActions({
+  row,
+  onCollect,
+  onAdjust,
+  onUndo,
+}: {
+  row: SavedRow;
+  onCollect: (t: CollectTarget) => void;
+  onAdjust: (t: {
+    paymentId: string;
+    currentTotal: number;
+    collected: number;
+    label: string;
+  }) => void;
+  onUndo: (t: { paymentId: string; collected: number; label: string }) => void;
+}) {
+  const paymentId = row.payment_id;
+  if (!paymentId) return null;
+  const total = row.total_fee_inr ?? 0;
+  const collected = row.collected_inr ?? row.paid_amount_inr ?? 0;
+  const remaining = row.remaining_inr ?? Math.max(0, total - collected);
+  const label = `${row.initial ? `${row.initial}. ` : ""}${row.full_name ?? "athlete"}`;
+  const showCollect =
+    row.payment_status !== "verified" && remaining > 0;
+  return (
+    <div className="flex items-center gap-1">
+      {showCollect && (
+        <button
+          type="button"
+          onClick={() =>
+            onCollect({
+              kind: "single",
+              paymentId,
+              amount: remaining,
+              label,
+            })
+          }
+          className="border-2 border-ink bg-ink px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-bone hover:bg-rust"
+          title={`Mark ₹${remaining.toLocaleString("en-IN")} collected`}
+        >
+          ₹{remaining.toLocaleString("en-IN")}
+        </button>
+      )}
+      <details className="relative">
+        <summary
+          className="cursor-pointer list-none border-2 border-ink/40 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-ink/70 marker:hidden hover:border-ink hover:text-ink [&::-webkit-details-marker]:hidden"
+          title="More payment actions"
+        >
+          ⋯
+        </summary>
+        <div className="absolute right-0 top-full z-30 mt-1 w-44 border-2 border-ink bg-bone shadow-[4px_4px_0_0_rgba(10,27,20,0.85)]">
+          <button
+            type="button"
+            onClick={(e) => {
+              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
+                "open",
+              );
+              onAdjust({
+                paymentId,
+                currentTotal: total,
+                collected,
+                label,
+              });
+            }}
+            className="block w-full px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.15em] text-ink hover:bg-kraft/30"
+          >
+            Adjust total
+          </button>
+          <button
+            type="button"
+            disabled={collected === 0}
+            onClick={(e) => {
+              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
+                "open",
+              );
+              onUndo({ paymentId, collected, label });
+            }}
+            className="block w-full px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.15em] text-ink hover:bg-kraft/30 disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-transparent"
+          >
+            Undo collection
+          </button>
+        </div>
+      </details>
+    </div>
+  );
 }
 
 function FileFallback({

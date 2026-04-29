@@ -5,8 +5,20 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import PendingLink from "@/components/PendingLink";
 import Spinner from "@/components/Spinner";
 import ProofReviewModal from "./ProofReviewModal";
+import AthleteEditModal from "./AthleteEditModal";
+import {
+  AdjustTotalPopover,
+  CollectPopover,
+  UndoCollectPopover,
+} from "./payment/PaymentPopovers";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { groupRowsByDistrict } from "@/lib/registrations/group-by-district";
+import {
+  prettyNonparaClassName,
+  prettyParaCode,
+} from "@/lib/rules/category-label";
+import type { WeightOverride } from "@/lib/rules/resolve";
+import { buildOverrideRows } from "@/lib/rules/weight-overrides";
 
 type PaymentCollection = {
   id: string;
@@ -54,6 +66,8 @@ type Row = {
   declared_weight_kg: number | null;
   weight_class_code: string | null;
   status: string | null;
+  lifecycle_status: "active" | "withdrawn" | null;
+  discipline_status: "clear" | "disqualified" | null;
   checkin_status: "not_arrived" | "weighed_in" | "no_show" | null;
   gender: string | null;
   nonpara_classes: string[] | null;
@@ -61,6 +75,7 @@ type Row = {
   nonpara_hand: string | null;
   para_codes: string[] | null;
   para_hand: string | null;
+  weight_overrides: WeightOverride[] | null;
   payments: Payment[] | Payment | null;
 };
 
@@ -350,6 +365,11 @@ export default function FastRegistrationsTable({
         label: string;
       }
   >(null);
+  // Open the AthleteEditModal for a single registration. Only the id is
+  // tracked here — the modal hydrates itself from
+  // GET /api/admin/registrations/[id] so the row's slim Row type does
+  // not need to carry the full editable payload.
+  const [editTarget, setEditTarget] = useState<string | null>(null);
 
   const openAdjust = useCallback((p: Payment) => {
     setAdjustTarget({
@@ -576,16 +596,8 @@ export default function FastRegistrationsTable({
       patch: { status: action === "verify" ? "verified" : "rejected" },
     });
     if (action === "verify") {
-      // Optimistically keep the legacy registrations.status mirror in sync
-      // for any rows whose payment was previously not verified. The server
-      // is the source of truth; this just avoids a flash of stale UI.
-      const regIds = selectedRows
-        .filter((r) => {
-          const p = getPayment(r);
-          return p && selectedPaymentIds.includes(p.id) && p.status !== "verified";
-        })
-        .map((r) => r.id);
-      if (regIds.length > 0) dispatch({ type: "patch", ids: regIds, patch: { status: "paid" } });
+      // Payment status is the source of truth; the registrations.status
+      // mirror is deprecated post-0039 so no optimistic patch needed.
     }
     const res = await fetch(`/api/admin/payments/bulk`, {
       method: "POST",
@@ -885,7 +897,7 @@ export default function FastRegistrationsTable({
         key={r.id}
         data-row-idx={idx}
         onClick={() => dispatch({ type: "cursor", cursor: idx })}
-        className={`h-[52px] border-b border-ink/10 last:border-b-0 align-top ${
+        className={`group/row relative h-[52px] border-b border-ink/10 last:border-b-0 align-top ${
           isSel ? "bg-rust/10" : isCur ? "bg-kraft/30" : "hover:bg-kraft/10"
         }`}
       >
@@ -906,32 +918,40 @@ export default function FastRegistrationsTable({
         </td>
         <td className="px-3 py-2 font-mono tabular-nums text-ink/60">
           {r.chest_no ?? "—"}
+          {scope.eventSlug && (
+            <a
+              href={`/admin/events/${scope.eventSlug ?? scope.eventId}/counter?edit=${r.id}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Edit in counter desk"
+              aria-label="Edit in counter desk"
+              className="pointer-events-none absolute left-12 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap border-2 border-ink bg-bone px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.15em] text-ink opacity-0 shadow-[2px_2px_0_0_rgba(10,27,20,0.6)] transition group-hover/row:pointer-events-auto group-hover/row:opacity-100 hover:bg-ink hover:text-bone"
+            >
+              <span aria-hidden="true">✎</span>
+              <span>Edit</span>
+            </a>
+          )}
         </td>
         <td className="px-3 py-2">
           <p className="font-semibold leading-tight">
             {r.initial ? `${r.initial}. ` : ""}
             {r.full_name ?? "—"}
-            {r.status === "disqualified" ? (
+            {r.discipline_status === "disqualified" || r.status === "disqualified" ? (
               <span className="ml-1.5 align-middle">
                 <LifecyclePill kind="dq" />
               </span>
-            ) : r.status === "withdrawn" ? (
+            ) : r.lifecycle_status === "withdrawn" || r.status === "withdrawn" ? (
               <span className="ml-1.5 align-middle">
                 <LifecyclePill kind="withdrawn" />
               </span>
             ) : null}
           </p>
         </td>
-        <td className="px-3 py-2 font-mono text-[13px]">{r.division ?? "—"}</td>
         <td className="px-3 py-2 font-mono text-[13px] text-ink/70">
           {inDistrictView
             ? (r.team ?? "—")
             : (r.district ?? r.team ?? "—")}
         </td>
-        <td className="px-3 py-2 text-right font-mono tabular-nums">
-          {r.declared_weight_kg ?? "—"}
-        </td>
-        <td className="px-3 py-2 font-mono text-[13px]">
+        <td className="px-3 py-2 font-mono text-[13px] min-w-[260px]">
           <ClassesCell row={r} />
         </td>
         <td className="px-3 py-2">
@@ -940,7 +960,7 @@ export default function FastRegistrationsTable({
         <td className="px-3 py-2">
           <PaymentPill payment={p} />
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="hidden px-3 py-2 text-right">
           <div className="flex items-center justify-end gap-1">
             {p?.proof_url && (
               <button
@@ -978,6 +998,17 @@ export default function FastRegistrationsTable({
                 onUndo={() => openUndo(p)}
               />
             )}
+            <button
+              type="button"
+              title="Edit registration"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditTarget(r.id);
+              }}
+              className="border border-ink/40 px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/70 hover:border-ink hover:text-ink"
+            >
+              ✎
+            </button>
           </div>
         </td>
       </tr>
@@ -992,7 +1023,7 @@ export default function FastRegistrationsTable({
             {scope.eventId ? `Event · ${scope.eventName}` : "Across all events"}
           </p>
           <h1 className="mt-2 font-display text-5xl font-black tracking-tight">Registrations</h1>
-          <p className="mt-1 font-mono text-[12px] text-ink/50">
+          <p className="mt-4 font-mono text-[12px] text-ink/50">
             <kbd className="border border-ink/40 px-1">/</kbd> search ·{" "}
             <kbd className="border border-ink/40 px-1">j/k</kbd> move ·{" "}
             <kbd className="border border-ink/40 px-1">x</kbd> select ·{" "}
@@ -1049,65 +1080,58 @@ export default function FastRegistrationsTable({
             className="mt-1 block w-72 border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
           />
         </label>
-        <label className="block">
-          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Division</span>
-          <select
-            name="filter-division"
-            value={filters.division}
-            onChange={(e) => setFilters({ ...filters, division: e.target.value })}
-            className="mt-1 block border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-          >
-            <option value="">All</option>
-            <option>Men</option>
-            <option>Women</option>
-            <option>Para Men</option>
-            <option>Para Women</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Entry</span>
-          <select
-            name="filter-entry"
-            value={filters.entry}
-            onChange={(e) => setFilters({ ...filters, entry: e.target.value })}
-            className="mt-1 block border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-          >
-            <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="withdrawn">Withdrawn</option>
-            <option value="disqualified">Disqualified</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Check-in</span>
-          <select
-            name="filter-checkin"
-            value={filters.checkin}
-            onChange={(e) => setFilters({ ...filters, checkin: e.target.value })}
-            className="mt-1 block border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-          >
-            <option value="">All</option>
-            <option value="not_arrived">Not arrived</option>
-            <option value="weighed_in">Weighed-in</option>
-            <option value="no_show">No-show</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Payment</span>
-          <select
-            name="filter-payment"
-            value={filters.payment}
-            onChange={(e) => setFilters({ ...filters, payment: e.target.value })}
-            className="mt-1 block border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-          >
-            {PAYMENT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
+        <div className="space-y-1">
+          <span className="block font-mono text-[12px] uppercase tracking-[0.2em]">Pay</span>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {(
+              [
+                ["", "All"],
+                ["paid", "Paid"],
+                ["non-paid", "Non-paid"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value || "all-pay"}
+                type="button"
+                onClick={() => setFilters({ ...filters, payment: value })}
+                className={`border-2 px-2 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.15em] ${
+                  filters.payment === value
+                    ? "border-ink bg-ink text-bone"
+                    : "border-ink/30 text-ink/60 hover:border-ink hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
             ))}
-          </select>
-        </label>
-        {(filters.q || filters.division || filters.entry || filters.checkin || filters.payment) && (
+          </div>
+        </div>
+        <div className="space-y-1">
+          <span className="block font-mono text-[12px] uppercase tracking-[0.2em]">Check-in</span>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {(
+              [
+                ["", "All"],
+                ["not_arrived", "Not arrived"],
+                ["weighed_in", "Weighed-in"],
+                ["no_show", "No-show"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value || "all-checkin"}
+                type="button"
+                onClick={() => setFilters({ ...filters, checkin: value })}
+                className={`border-2 px-2 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.15em] ${
+                  filters.checkin === value
+                    ? "border-ink bg-ink text-bone"
+                    : "border-ink/30 text-ink/60 hover:border-ink hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(filters.q || filters.checkin || filters.payment) && (
           <button
             type="button"
             onClick={() => setFilters({ q: "", division: "", entry: "", checkin: "", payment: "" })}
@@ -1350,14 +1374,11 @@ export default function FastRegistrationsTable({
           <colgroup>
             <col className="w-10" />
             <col className="w-14" />
+            <col className="w-[20%]" />
+            <col className="w-[14%]" />
             <col />
-            <col className="w-24" />
-            {groupBy !== "district" && <col className="w-32" />}
-            <col className="w-14" />
-            <col className="w-32" />
-            <col className="w-28" />
-            <col className="w-44" />
-            <col className="w-44" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
           </colgroup>
           <thead className="sticky top-[60px] z-20 border-b-2 border-ink bg-kraft/95 text-left font-mono text-[12px] uppercase tracking-[0.2em] backdrop-blur-sm">
             <tr>
@@ -1378,13 +1399,10 @@ export default function FastRegistrationsTable({
               </th>
               <th className="px-3 py-3">#</th>
               <th className="px-3 py-3">Name</th>
-              <th className="px-3 py-3">Division</th>
               <th className="px-3 py-3">{groupBy === "district" ? "Team" : "District / Team"}</th>
-              <th className="px-3 py-3 text-right">Wt</th>
-              <th className="px-3 py-3">Classes</th>
+              <th className="px-3 py-3 min-w-[260px]">Classes</th>
               <th className="px-3 py-3">Check-in</th>
               <th className="px-3 py-3">Payment</th>
-              <th className="px-3 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1448,7 +1466,7 @@ export default function FastRegistrationsTable({
                           }
                         />
                       </td>
-                      <td colSpan={9} className="px-3 py-2 align-middle">
+                      <td colSpan={6} className="px-3 py-2 align-middle">
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                           <button
                             type="button"
@@ -1518,7 +1536,7 @@ export default function FastRegistrationsTable({
                             key={`group-${g.key}-pager`}
                             className="border-b-2 border-ink/30 bg-kraft/40"
                           >
-                            <td colSpan={10} className="px-3 py-2">
+                            <td colSpan={7} className="px-3 py-2">
                               <div className="flex flex-wrap items-center justify-end gap-2 font-mono text-[13px] text-ink/60">
                                 <span>
                                   Rows {sliceStart + 1}–
@@ -1557,7 +1575,7 @@ export default function FastRegistrationsTable({
             {state.rows.length === 0 && !state.loading && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={7}
                   className="px-3 py-8 text-center font-mono text-[13px] text-ink/50"
                 >
                   No registrations match these filters.
@@ -1669,7 +1687,7 @@ export default function FastRegistrationsTable({
                   patch: { status: action === "verify" ? "verified" : "rejected" },
                 });
                 if (action === "verify" && row && p && p.status !== "verified") {
-                  dispatch({ type: "patch", ids: [row.id], patch: { status: "paid" } });
+                  // registrations.status mirror deprecated post-0039.
                 }
                 flash(`payment ${action === "verify" ? "verified" : "rejected"}`);
               }}
@@ -1724,6 +1742,20 @@ export default function FastRegistrationsTable({
           }
         />
       )}
+      {editTarget && (
+        <AthleteEditModal
+          registrationId={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            // Soft refresh — bump the row's updated_at via a refetch.
+            // The PATCH endpoint doesn't return the new row shape, so
+            // we just re-pull the page to pick up renames / new
+            // weight class / etc.
+            void fetchList(state.page);
+            flash("registration updated");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1749,23 +1781,23 @@ function CheckinPill({
 }) {
   if (status === "weighed_in") {
     return (
-      <span className="inline-block whitespace-nowrap border border-moss bg-moss px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-white">
+      <span className="inline-block whitespace-nowrap border border-moss bg-moss px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-white">
         weighed-in
       </span>
     );
   }
   if (status === "no_show") {
     return (
-      <span className="inline-block whitespace-nowrap border border-rust bg-rust px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-white">
+      <span className="inline-block whitespace-nowrap border border-rust bg-rust px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-white">
         no-show
       </span>
     );
   }
-  return <span className="font-mono text-[12px] text-ink/40">—</span>;
+  return <span className="font-mono text-[11px] text-ink/40">—</span>;
 }
 
 function PaymentPill({ payment }: { payment: Payment | null }) {
-  if (!payment) return <span className="font-mono text-[12px] text-ink/40">—</span>;
+  if (!payment) return <span className="font-mono text-[11px] text-ink/40">—</span>;
   const collected = collectedInr(payment);
   const total = payment.amount_inr ?? 0;
   const remaining = Math.max(0, total - collected);
@@ -1817,26 +1849,26 @@ function PaymentPill({ payment }: { payment: Payment | null }) {
       : null;
   return (
     <div className="flex flex-col gap-0.5 leading-tight">
-      <span className="flex flex-wrap items-center gap-1.5">
+      <span className="flex flex-wrap items-center gap-1">
         <span
-          className={`inline-block whitespace-nowrap border px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] ${color}`}
+          className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] ${color}`}
         >
           {label}
         </span>
         {total > 0 && (
-          <span className="font-mono text-[12px] tabular-nums text-ink/60">
+          <span className="font-mono text-[11px] tabular-nums text-ink/60">
             ₹{collected.toLocaleString("en-IN")}
             <span className="text-ink/40">{" / ₹"}{total.toLocaleString("en-IN")}</span>
           </span>
         )}
         {methodLabel && (
-          <span className="inline-block border border-ink/30 px-1 font-mono text-[11px] uppercase tracking-[0.15em] text-ink/60">
+          <span className="inline-block border border-ink/30 px-1 font-mono text-[10px] uppercase tracking-[0.15em] text-ink/60">
             {methodLabel}
           </span>
         )}
         {payerLabel && (
           <span
-            className="inline-block border border-ink/40 bg-kraft/30 px-1 font-mono text-[11px] uppercase tracking-[0.15em] text-ink/70"
+            className="inline-block border border-ink/40 bg-kraft/30 px-1 font-mono text-[10px] uppercase tracking-[0.15em] text-ink/70"
             title={`Paid by ${payerLabel}`}
           >
             By {payerLabel}
@@ -1844,287 +1876,25 @@ function PaymentPill({ payment }: { payment: Payment | null }) {
         )}
       </span>
       {payment.utr && (
-        <span className="truncate font-mono text-[12px] text-ink/50" title={payment.utr}>
+        <span className="truncate font-mono text-[10px] text-ink/50" title={payment.utr}>
           {payment.utr}
         </span>
       )}
     </div>
   );
 }
-
-/**
- * "Collect ₹X" popover. Drives both single-row collection (with optional
- * amount override for concessions) and bulk-by-district collection (one
- * shared reference, e.g. "Trichy DC bundle 22-Apr").
- */
-function CollectPopover({
-  target,
-  onClose,
-  onConfirm,
-}: {
-  target:
-    | { kind: "single"; paymentId: string; amount: number; label: string }
-    | {
-        kind: "bulk";
-        paymentIds: string[];
-        total: number;
-        label: string;
-        defaultPayer: string | null;
-      };
-  onClose: () => void;
-  onConfirm: (opts: {
-    method: "cash" | "manual_upi" | "waiver";
-    reference: string | null;
-    amountOverride: number | null;
-    waiveRemainder: boolean;
-    /** Bulk only — pool to spread oldest-first. null = "settle each remainder". */
-    poolAmount: number | null;
-    /** Bulk only — stamped on every created collection. */
-    payerLabel: string | null;
-  }) => void;
-}) {
-  const [method, setMethod] = useState<"cash" | "manual_upi" | "waiver">("cash");
-  const [reference, setReference] = useState("");
-  const [amount, setAmount] = useState(
-    target.kind === "single" ? String(target.amount) : ""
-  );
-  const [waiveRemainder, setWaiveRemainder] = useState(false);
-  // Bulk-only: pool amount (typed) + payer label (defaults to district / team name).
-  const [poolAmount, setPoolAmount] = useState(
-    target.kind === "bulk" ? String(target.total) : ""
-  );
-  const [payerLabel, setPayerLabel] = useState(
-    target.kind === "bulk" ? target.defaultPayer ?? "" : ""
-  );
-  const total = target.kind === "single" ? target.amount : target.total;
-  const typed = Number(amount) || 0;
-  const willWaiveAmount =
-    target.kind === "single" && waiveRemainder ? Math.max(0, total - typed) : 0;
-  const poolNum = Number(poolAmount) || 0;
-  const poolShortfall =
-    target.kind === "bulk" && method !== "waiver"
-      ? Math.max(0, total - poolNum)
-      : 0;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
-      >
-        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
-          {target.kind === "single" ? "Mark as collected" : "Bulk collect"}
-        </p>
-        <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
-          {target.label}
-        </h3>
-        <p className="mt-1 font-mono text-[13px] text-ink/60">
-          Remaining balance{" "}
-          <span className="font-bold text-ink">
-            ₹{total.toLocaleString("en-IN")}
-          </span>
-          {target.kind === "bulk"
-            ? " · type a smaller pool to auto-allocate oldest-first"
-            : " · type a smaller amount for an installment"}
-        </p>
-
-        <div className="mt-5 space-y-4">
-          <fieldset>
-            <legend className="font-mono text-[12px] uppercase tracking-[0.2em]">
-              Method
-            </legend>
-            <div className="mt-2 grid grid-cols-3 gap-1 border-2 border-ink">
-              {(
-                [
-                  ["cash", "Cash"],
-                  ["manual_upi", "UPI"],
-                  ["waiver", "Waiver"],
-                ] as const
-              ).map(([v, l]) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setMethod(v)}
-                  className={`px-3 py-2 font-mono text-[13px] uppercase tracking-[0.2em] ${
-                    method === v ? "bg-ink text-bone" : "bg-bone text-ink hover:bg-kraft/30"
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {target.kind === "single" && method !== "waiver" && (
-            <label className="block">
-              <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-                Amount (₹)
-              </span>
-              <input
-                type="number"
-                min={0}
-                max={total}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-              />
-              <span className="mt-1 block font-mono text-[12px] text-ink/50">
-                Defaults to the full remainder. Type a smaller number to
-                record an installment — the next collect will offer the
-                rest.
-              </span>
-            </label>
-          )}
-
-          {target.kind === "single" && method !== "waiver" && total - typed > 0 && (
-            <label className="flex items-start gap-2 border-2 border-dashed border-ink/30 bg-kraft/10 px-3 py-2">
-              <input
-                type="checkbox"
-                checked={waiveRemainder}
-                onChange={(e) => setWaiveRemainder(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span className="font-mono text-[13px] leading-snug text-ink/80">
-                Waive the rest (₹{Math.max(0, total - typed).toLocaleString("en-IN")})
-                <span className="block text-[12px] text-ink/50">
-                  Closes the balance with a waiver collection so the
-                  athlete shows as fully paid.
-                </span>
-              </span>
-            </label>
-          )}
-
-          {target.kind === "bulk" && method !== "waiver" && (
-            <>
-              <label className="block">
-                <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-                  Pool amount (₹)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={poolAmount}
-                  onChange={(e) => setPoolAmount(e.target.value)}
-                  className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-                />
-                <span className="mt-1 block font-mono text-[12px] text-ink/50">
-                  Defaults to the full district balance. Lower it and we
-                  auto-allocate oldest-first until it runs out.
-                </span>
-              </label>
-              {poolShortfall > 0 && (
-                <p className="border-2 border-gold bg-gold/10 px-3 py-2 font-mono text-[13px] leading-snug text-ink">
-                  ⚠ Pool ₹{poolNum.toLocaleString("en-IN")} is short by ₹
-                  {poolShortfall.toLocaleString("en-IN")}. Athletes are
-                  settled oldest-first; the rest stay pending.
-                </p>
-              )}
-              <label className="block">
-                <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-                  Paid by
-                </span>
-                <input
-                  type="text"
-                  value={payerLabel}
-                  onChange={(e) => setPayerLabel(e.target.value)}
-                  placeholder="District or team name"
-                  className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-                />
-                <span className="mt-1 block font-mono text-[12px] text-ink/50">
-                  Stamped on every collection so the row shows a small
-                  "By {payerLabel || "…"}" chip.
-                </span>
-              </label>
-              <label className="flex items-start gap-2 border-2 border-dashed border-ink/30 bg-kraft/10 px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={waiveRemainder}
-                  onChange={(e) => setWaiveRemainder(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span className="font-mono text-[13px] leading-snug text-ink/80">
-                  Treat any shortfall as a waiver per athlete.
-                </span>
-              </label>
-            </>
-          )}
-
-          <label className="block">
-            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-              Reference / note
-            </span>
-            <input
-              type="text"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder={
-                target.kind === "bulk"
-                  ? "e.g. Trichy DC · Mr. Selvam · 22-Apr · receipt #421"
-                  : "e.g. cash receipt #018"
-              }
-              className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-            />
-            {target.kind === "bulk" && (
-              <span className="mt-1 block font-mono text-[12px] text-ink/50">
-                Same reference is recorded on every payment so you can
-                find the bundle later in the audit log.
-              </span>
-            )}
-          </label>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onConfirm({
-                method,
-                reference: reference.trim() || null,
-                amountOverride:
-                  target.kind === "single" && method !== "waiver" && amount.trim().length > 0
-                    ? Math.max(0, Number(amount) || 0)
-                    : null,
-                waiveRemainder,
-                poolAmount:
-                  target.kind === "bulk" && method !== "waiver" && poolAmount.trim().length > 0
-                    ? Math.max(0, Number(poolAmount) || 0)
-                    : null,
-                payerLabel:
-                  target.kind === "bulk" && payerLabel.trim().length > 0
-                    ? payerLabel.trim()
-                    : null,
-              })
-            }
-            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
-          >
-            {method === "waiver"
-              ? `Waive ₹${total.toLocaleString("en-IN")}`
-              : waiveRemainder && willWaiveAmount > 0
-                ? `Collect ₹${typed.toLocaleString("en-IN")} + waive ₹${willWaiveAmount.toLocaleString("en-IN")}`
-                : target.kind === "bulk" && poolNum > 0 && poolNum < total
-                  ? `Allocate ₹${poolNum.toLocaleString("en-IN")} oldest-first`
-                  : `Confirm collect`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function handLabel(h: string | null | undefined): string {
   if (!h) return "";
   if (h === "B") return "R+L";
+  if (h === "R") return "Right";
+  if (h === "L") return "Left";
   return h;
+}
+
+function genderLabel(g: string | null | undefined): string {
+  if (g === "M") return "Men";
+  if (g === "F") return "Women";
+  return "";
 }
 
 function ClassesCell({ row }: { row: Row }) {
@@ -2133,13 +1903,67 @@ function ClassesCell({ row }: { row: Row }) {
   const fallbackHand = row.nonpara_hand ?? null;
   const paraCodes = row.para_codes ?? [];
   const paraHand = row.para_hand ?? null;
+  const gender = genderLabel(row.gender);
 
-  const items: { label: string; hand: string }[] = [];
+  // Resolved weight bucket per (scope × code × hand). Indexed so the
+  // markup loop below can look up the bucket label for each entry. Keyed
+  // by `${scope}|${code}|${hand}` to disambiguate same-class R/L splits.
+  const wt = Number(row.declared_weight_kg);
+  const resolved = Number.isFinite(wt) && wt > 0
+    ? buildOverrideRows(
+        {
+          gender: row.gender as "M" | "F" | null,
+          nonpara_classes: nonparaClasses,
+          nonpara_hands: (nonparaHands.length > 0
+            ? nonparaHands
+            : nonparaClasses.map(() => fallbackHand)) as Array<"R" | "L" | "B" | null>,
+          para_codes: paraCodes,
+          para_hand: paraHand as "R" | "L" | "B" | null,
+          weight_overrides: row.weight_overrides ?? [],
+        },
+        wt,
+      )
+    : [];
+  const bucketByKey = new Map<string, { label: string; up: boolean }>();
+  for (const r of resolved) {
+    const key = `${r.scope}|${r.code}`;
+    if (!bucketByKey.has(key)) {
+      bucketByKey.set(key, {
+        label: r.selectedBucket.label,
+        up: r.competingUp,
+      });
+    }
+  }
+
+  type Item = {
+    para: boolean;
+    gender: string;
+    age: string;
+    hand: string;
+    bucket?: { label: string; up: boolean };
+  };
+  const items: Item[] = [];
   nonparaClasses.forEach((cls, i) => {
-    items.push({ label: cls, hand: handLabel(nonparaHands[i] ?? fallbackHand) });
+    const r = resolved.find(
+      (x) => x.scope === "nonpara" && x.className === cls
+    );
+    items.push({
+      para: false,
+      gender,
+      age: prettyNonparaClassName(cls) || cls,
+      hand: handLabel(nonparaHands[i] ?? fallbackHand),
+      bucket: r ? { label: r.selectedBucket.label, up: r.competingUp } : undefined,
+    });
   });
   paraCodes.forEach((code) => {
-    items.push({ label: `Para ${code}`, hand: handLabel(paraHand) });
+    const b = bucketByKey.get(`para|${code}`);
+    items.push({
+      para: true,
+      gender,
+      age: prettyParaCode(code) || code,
+      hand: handLabel(paraHand),
+      bucket: b,
+    });
   });
 
   if (items.length === 0) {
@@ -2151,17 +1975,38 @@ function ClassesCell({ row }: { row: Row }) {
   }
 
   return (
-    <ul className="flex flex-col gap-0.5">
-      {items.map((it, i) => (
-        <li key={`${it.label}-${i}`} className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="border border-ink/30 px-1.5 py-0.5 text-[12px] uppercase tracking-[0.15em]">
-            {it.label}
-          </span>
-          {it.hand && (
-            <span className="text-[12px] text-ink/60">{it.hand}</span>
-          )}
-        </li>
-      ))}
+    <ul className="flex flex-col gap-1 text-[13px] leading-tight">
+      {items.map((it, i) => {
+        const meta = [it.gender, it.hand].filter(Boolean).join(" · ");
+        return (
+          <li
+            key={`${it.age}-${i}`}
+            className="group flex items-center justify-between gap-3 border-l-2 border-ink/15 pl-2 hover:border-ink/40"
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold text-ink">{it.age}</span>
+              {meta && (
+                <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink/45">
+                  {meta}
+                </span>
+              )}
+            </span>
+            {it.bucket && (
+              <span
+                className={`shrink-0 whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[11px] tabular-nums ${
+                  it.bucket.up
+                    ? "border-rust bg-rust/10 font-bold text-rust"
+                    : "border-ink/20 bg-bone text-ink/70"
+                }`}
+                title={it.bucket.up ? "Operator picked a heavier bucket" : "Auto bucket from weight"}
+              >
+                {it.bucket.label}
+                {it.bucket.up ? " ↑" : ""}
+              </span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -2236,179 +2081,3 @@ function RowActionsMenu({
   );
 }
 
-/**
- * Modal � change payments.amount_inr. Used when the operator entered
- * the wrong total or the athlete's category set changed after the
- * payment was created. Server re-derives erified against existing
- * collections.
- */
-function AdjustTotalPopover({
-  target,
-  onClose,
-  onConfirm,
-}: {
-  target: { paymentId: string; currentTotal: number; collected: number; label: string };
-  onClose: () => void;
-  onConfirm: (opts: { amountInr: number; reason: string | null }) => void;
-}) {
-  const [amount, setAmount] = useState(String(target.currentTotal));
-  const [reason, setReason] = useState("");
-  const newTotal = Math.max(0, Number(amount) || 0);
-  const newRemaining = Math.max(0, newTotal - target.collected);
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
-      >
-        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
-          Adjust total fee
-        </p>
-        <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
-          {target.label}
-        </h3>
-        <p className="mt-1 font-mono text-[13px] text-ink/60">
-          ?{target.collected.toLocaleString("en-IN")} already collected.
-        </p>
-
-        <div className="mt-5 space-y-4">
-          <label className="block">
-            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-              New total (?)
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-            />
-            <span className="mt-1 block font-mono text-[12px] text-ink/50">
-              {newTotal === target.collected
-                ? "Will mark as fully paid."
-                : newTotal > target.collected
-                  ? `Will leave ₹${newRemaining.toLocaleString("en-IN")} pending.`
-                  : "New total is below collected — refund flow not implemented; will still mark as fully paid."}
-            </span>
-          </label>
-          <label className="block">
-            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-              Reason
-            </span>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. extra category added, fee correction"
-              className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onConfirm({ amountInr: newTotal, reason: reason.trim() || null })
-            }
-            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
-          >
-            Save total
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Modal � soft-reverse the most recent collection (or all of them).
- * Mandatory 
-eason so the audit trail captures why an operator chose
- * to undo.
- */
-function UndoCollectPopover({
-  target,
-  onClose,
-  onConfirm,
-}: {
-  target: { paymentId: string; collected: number; label: string };
-  onClose: () => void;
-  onConfirm: (opts: { reason: string; all: boolean }) => void;
-}) {
-  const [reason, setReason] = useState("");
-  const [all, setAll] = useState(false);
-  const ok = reason.trim().length >= 3;
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
-      >
-        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-rust">
-          Undo collection
-        </p>
-        <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
-          {target.label}
-        </h3>
-        <p className="mt-1 font-mono text-[13px] text-ink/60">
-          Soft-reverses the {all ? "all collections" : "most recent collection"}. The row stays in the audit log.
-        </p>
-
-        <div className="mt-5 space-y-4">
-          <label className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.2em] text-ink/80">
-            <input
-              type="checkbox"
-              checked={all}
-              onChange={(e) => setAll(e.target.checked)}
-            />
-            Reverse every active collection
-          </label>
-          <label className="block">
-            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
-              Reason (required)
-            </span>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. wrong athlete, double-counted, accidental verify"
-              className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!ok}
-            onClick={() => onConfirm({ reason: reason.trim(), all })}
-            className="border-2 border-rust bg-rust px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-white hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Reverse
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -47,16 +47,17 @@ export async function POST(req: NextRequest) {
   }
   const bracketFormat = "double_elim";
 
-  // Eligible registrations: any status except withdrawn/disqualified.
-  // Payment is NOT required to weigh in, so we include `pending` here
-  // and use the presence of a weigh_ins row below as the real gate.
+  // Eligible registrations: still competing (lifecycle active, discipline
+  // clear). Payment is NOT required to weigh in, so any payment state
+  // qualifies; the presence of a weigh_ins row below is the real gate.
   const { data: regs, error: regErr } = await svc
     .from("registrations")
     .select(
-      "id, chest_no, declared_weight_kg, district, team, gender, nonpara_classes, nonpara_hand, nonpara_hands, para_codes, para_hand, weight_bump_up, status"
+      "id, chest_no, declared_weight_kg, district, team, gender, nonpara_classes, nonpara_hand, nonpara_hands, para_codes, para_hand, weight_overrides, status"
     )
     .eq("event_id", eventId)
-    .in("status", ["pending", "paid", "weighed_in"])
+    .eq("lifecycle_status", "active")
+    .eq("discipline_status", "clear")
     .order("chest_no", { ascending: true, nullsFirst: false });
   if (regErr) return NextResponse.json({ error: regErr.message }, { status: 500 });
 
@@ -123,7 +124,8 @@ export async function POST(req: NextRequest) {
         ),
       para_codes: (r.para_codes as string[] | null) ?? [],
       para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
-      weight_bump_up: r.weight_bump_up === true,
+      weight_overrides:
+        (r.weight_overrides as RegistrationLite["weight_overrides"]) ?? null,
     };
     const resolved = resolveEntries(lite, latestWi.get(r.id) ?? null, refYear);
     for (const e of resolved) {

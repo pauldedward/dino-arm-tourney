@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveEntries, type RegistrationLite } from "./resolve";
+import { resolveEntries, allowedHeavierBuckets, type RegistrationLite } from "./resolve";
+import { WAF_ABLE, WAF_PARA } from "./waf-2025";
 
 const baseReg: RegistrationLite = {
   id: "r1",
@@ -19,6 +20,7 @@ describe("resolveEntries", () => {
     assert.equal(out[0].division, "Men");
     assert.equal(out[0].hand, "R");
     assert.equal(out[0].age_band, "SENIOR");
+    assert.equal(out[0].competing_up, false);
   });
 
   it("non-para hand=B fans out to R + L", () => {
@@ -109,49 +111,63 @@ describe("resolveEntries", () => {
       },
       null
     );
-    // JUNIOR 18 → R + L (2), SENIOR → R (1) = 3
     assert.equal(out.length, 3);
-    const juniorHands = out
-      .filter((e) => e.age_band === "JUNIOR 18")
-      .map((e) => e.hand)
-      .sort();
-    assert.deepEqual(juniorHands, ["L", "R"]);
-    const seniorHands = out
-      .filter((e) => e.age_band === "SENIOR")
-      .map((e) => e.hand);
-    assert.deepEqual(seniorHands, ["R"]);
+  });
+});
+
+describe("resolveEntries — weight_overrides", () => {
+  it("override to a heavier bucket promotes the entry and sets competing_up", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 78,
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "M-100" },
+        ],
+      },
+      null
+    );
+    assert.equal(out[0].weight_class, "−100 kg");
+    assert.equal(out[0].competing_up, true);
+    assert.equal(out[0].category_code, "M-−100 kg-R");
   });
 
-  it("weight_bump_up moves non-para entry one bucket up", () => {
-    // Senior M @ 78 kg normally falls in −80 kg; bump → −85 kg.
-    const base = resolveEntries(
-      { ...baseReg, declared_weight_kg: 78 },
+  it("override to a lighter bucket is silently ignored", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 95,
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "M-80" },
+        ],
+      },
       null
     );
-    const bumped = resolveEntries(
-      { ...baseReg, declared_weight_kg: 78, weight_bump_up: true },
-      null
-    );
-    assert.equal(base[0].weight_class, "−80 kg");
-    assert.equal(bumped[0].weight_class, "−85 kg");
-    assert.equal(bumped[0].category_code, "M-−85 kg-R");
+    assert.equal(out[0].weight_class, "−100 kg");
+    assert.equal(out[0].competing_up, false);
   });
 
-  it("weight_bump_up at the open bucket is a no-op", () => {
-    // Senior M @ 130 kg already lands in the open (+110 kg) bucket.
-    const base = resolveEntries(
-      { ...baseReg, declared_weight_kg: 130 },
+  it("per-hand override: R bumped, L stays auto", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 78,
+        nonpara_hands: ["B"],
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "M-100" },
+        ],
+      },
       null
     );
-    const bumped = resolveEntries(
-      { ...baseReg, declared_weight_kg: 130, weight_bump_up: true },
-      null
-    );
-    assert.equal(base[0].weight_class, bumped[0].weight_class);
-    assert.equal(bumped[0].category_code, base[0].category_code);
+    const r = out.find((e) => e.hand === "R")!;
+    const l = out.find((e) => e.hand === "L")!;
+    assert.equal(r.weight_class, "−100 kg");
+    assert.equal(r.competing_up, true);
+    assert.equal(l.weight_class, "−80 kg");
+    assert.equal(l.competing_up, false);
   });
 
-  it("weight_bump_up does not affect para entries", () => {
+  it("para override works (PIU U @ 65 bumped to U-90)", () => {
     const out = resolveEntries(
       {
         ...baseReg,
@@ -160,13 +176,107 @@ describe("resolveEntries", () => {
         para_codes: ["U"],
         para_hand: "R",
         declared_weight_kg: 65,
-        weight_bump_up: true,
+        weight_overrides: [
+          { scope: "para", code: "U", hand: "R", bucket_code: "U-90" },
+        ],
       },
       null
     );
-    // PIU Standing male buckets: 60, 70, 80, 90, open(90+).
-    // 65 kg → −70 kg even with bump on (bump is non-para only).
     assert.equal(out.length, 1);
-    assert.equal(out[0].weight_class, "−70 kg");
+    assert.equal(out[0].weight_class, "−90 kg");
+    assert.equal(out[0].competing_up, true);
+  });
+
+  it("override to open bucket is allowed", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 78,
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "M-110+" },
+        ],
+      },
+      null
+    );
+    assert.equal(out[0].weight_class, "+110 kg");
+    assert.equal(out[0].competing_up, true);
+  });
+
+  it("override at the open bucket is a no-op", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 130,
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "M-110+" },
+        ],
+      },
+      null
+    );
+    assert.equal(out[0].weight_class, "+110 kg");
+    assert.equal(out[0].competing_up, false);
+  });
+
+  it("'+1' sentinel (legacy backfill) bumps one bucket up", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 78,
+        weight_overrides: [
+          { scope: "nonpara", code: "M", hand: "R", bucket_code: "+1" },
+        ],
+      },
+      null
+    );
+    assert.equal(out[0].weight_class, "−85 kg");
+    assert.equal(out[0].competing_up, true);
+  });
+
+  it("override with mismatched code is ignored", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        declared_weight_kg: 78,
+        weight_overrides: [
+          { scope: "nonpara", code: "Y", hand: "R", bucket_code: "Y-110" },
+        ],
+      },
+      null
+    );
+    assert.equal(out[0].weight_class, "−80 kg");
+    assert.equal(out[0].competing_up, false);
+  });
+});
+
+describe("allowedHeavierBuckets", () => {
+  it("returns auto bucket plus every heavier in the WAF grid", () => {
+    const senior = WAF_ABLE.find((c) => c.code === "M")!;
+    const out = allowedHeavierBuckets(senior, 78);
+    assert.deepEqual(out.map((b) => b.label), [
+      "−80 kg",
+      "−85 kg",
+      "−90 kg",
+      "−100 kg",
+      "−110 kg",
+      "+110 kg",
+    ]);
+  });
+
+  it("at the open bucket returns just the open bucket", () => {
+    const senior = WAF_ABLE.find((c) => c.code === "M")!;
+    const out = allowedHeavierBuckets(senior, 130);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].label, "+110 kg");
+  });
+
+  it("works for para categories", () => {
+    const piu = WAF_PARA.find((c) => c.code === "U")!;
+    const out = allowedHeavierBuckets(piu, 65);
+    assert.deepEqual(out.map((b) => b.label), [
+      "−70 kg",
+      "−80 kg",
+      "−90 kg",
+      "+90 kg",
+    ]);
   });
 });

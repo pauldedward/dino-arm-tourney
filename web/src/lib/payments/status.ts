@@ -1,23 +1,31 @@
 /**
- * Payment / weigh-in status helpers.
+ * Status helpers — one source of truth for "paid?", "weighed?",
+ * "withdrawn?", "disqualified?" across the entire app.
  *
- * Single source of truth for "is this athlete paid?" and "did they weigh in?"
- * Replaces the historical conflation between `registrations.status` and
- * `payments.status` that produced inconsistent results across the operator
- * console, sheets, PDFs, and athlete-facing pages.
+ * Post-0039 the schema has dedicated columns per axis:
+ *   - registrations.lifecycle_status   active | withdrawn
+ *   - registrations.discipline_status  clear  | disqualified
+ *   - registrations.checkin_status     not_arrived | weighed_in | no_show
+ *   - payment_summary.derived_status   pending | verified | rejected | …
  *
- * Rules:
- *  - **Paid** = any non-reversed payment row has status `verified`. We still
- *    fall back to the legacy `registrations.status in ('paid','weighed_in')`
- *    so rows written before the payments table existed (or by the bulk-row
- *    writer that mirrors both fields) keep working until the schema split
- *    migration lands.
- *  - **Weighed** = at least one row in `weigh_ins`. Fall back to the legacy
- *    `registrations.status = 'weighed_in'` for the same reason.
- *  - **Withdrawn / cancelled** registrations are never reported as paid even
- *    if a stale payment row exists; the refund flow is handled separately.
+ * The legacy `registrations.status` column is kept as a deprecated mirror.
+ * These helpers tolerate it (`legacyStatus` arg) only for the lifecycle and
+ * discipline tokens (`withdrawn`, `disqualified`) so unmigrated rows still
+ * render correctly. They no longer treat `paid` or `weighed_in` on the
+ * legacy column as truth — those signals now live on the dedicated columns.
  */
 
+export type LifecycleStatus = "active" | "withdrawn";
+export type DisciplineStatus = "clear" | "disqualified";
+export type CheckinStatus = "not_arrived" | "weighed_in" | "no_show";
+export type DerivedPaymentStatus =
+  | "pending"
+  | "verified"
+  | "rejected"
+  | "reversed"
+  | string;
+
+/** Legacy union — retained for back-compat with code that types vars. */
 export type RegistrationStatus =
   | "pending"
   | "paid"
@@ -31,39 +39,91 @@ export type PaymentRow = {
   utr?: string | null;
 } | null | undefined;
 
-export function isPaid(
-  registrationStatus: RegistrationStatus | null | undefined,
-  payments: ReadonlyArray<PaymentRow> | null | undefined,
+/* ---------- Lifecycle / discipline predicates ---------- */
+
+export function isWithdrawn(
+  lifecycleStatus?: string | null,
+  legacyStatus?: string | null,
 ): boolean {
-  if (
-    registrationStatus === "withdrawn" ||
-    registrationStatus === "disqualified"
-  ) {
-    return false;
-  }
-  const list = payments ?? [];
-  if (list.some((p) => p?.status === "verified")) return true;
+  if (lifecycleStatus === "withdrawn") return true;
+  // Pre-0039 row whose only signal is the deprecated mirror.
+  if (!lifecycleStatus && legacyStatus === "withdrawn") return true;
+  return false;
+}
+
+export function isDisqualified(
+  disciplineStatus?: string | null,
+  legacyStatus?: string | null,
+): boolean {
+  if (disciplineStatus === "disqualified") return true;
+  if (!disciplineStatus && legacyStatus === "disqualified") return true;
+  return false;
+}
+
+export function isCompeting(opts: {
+  lifecycleStatus?: string | null;
+  disciplineStatus?: string | null;
+  legacyStatus?: string | null;
+}): boolean {
   return (
-    registrationStatus === "paid" || registrationStatus === "weighed_in"
+    !isWithdrawn(opts.lifecycleStatus, opts.legacyStatus) &&
+    !isDisqualified(opts.disciplineStatus, opts.legacyStatus)
   );
 }
 
-export type CheckinStatus = "not_arrived" | "weighed_in" | "no_show" | string;
+/* ---------- Paid ---------- */
+
+export interface IsPaidOpts {
+  lifecycleStatus?: string | null;
+  disciplineStatus?: string | null;
+  /** payment_summary.derived_status — preferred over scanning payments[]. */
+  derivedPaymentStatus?: string | null;
+}
+
+/**
+ * Paid = athlete has a verified payment AND is still competing.
+ *
+ * Callers can pass either a derived `payment_summary.derived_status` via
+ * `opts.derivedPaymentStatus` (preferred) or a `payments[]` snapshot.
+ * Withdrawn / DQ'd athletes are never reported as paid.
+ */
+export function isPaid(
+  legacyStatus: RegistrationStatus | null | undefined,
+  payments: ReadonlyArray<PaymentRow> | null | undefined,
+  opts: IsPaidOpts = {},
+): boolean {
+  if (
+    !isCompeting({
+      lifecycleStatus: opts.lifecycleStatus,
+      disciplineStatus: opts.disciplineStatus,
+      legacyStatus,
+    })
+  ) {
+    return false;
+  }
+  if (opts.derivedPaymentStatus === "verified") return true;
+  const list = payments ?? [];
+  if (list.some((p) => p?.status === "verified")) return true;
+  return false;
+}
+
+/* ---------- Weighed ---------- */
 
 export function isWeighed(
-  registrationStatus: RegistrationStatus | null | undefined,
+  _legacyStatus: RegistrationStatus | null | undefined,
   weighIns: ReadonlyArray<{ id?: string | null } | null | undefined> | null | undefined,
-  checkinStatus?: CheckinStatus | null,
+  checkinStatus?: CheckinStatus | string | null,
 ): boolean {
-  // checkin_status (added in 0029) is the post-migration source of
-  // truth. When a caller passes it, trust it absolutely — the trigger
-  // on weigh_ins keeps it in lockstep with the weigh_ins table.
+  // checkin_status is the post-0029 source of truth — trigger on
+  // weigh_ins keeps it in lockstep.
   if (checkinStatus !== undefined && checkinStatus !== null) {
     return checkinStatus === "weighed_in";
   }
   if (weighIns && weighIns.length > 0) return true;
-  return registrationStatus === "weighed_in";
+  return false;
 }
+
+/* ---------- Display helper for payment chips ---------- */
 
 export type PaymentTone = "ok" | "bad" | "warn" | "muted";
 

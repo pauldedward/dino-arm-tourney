@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 // queue.ts is "use client" but at runtime that directive is just a hint —
 // node --test loads the module fine. tsx handles the TS.
 import {
+  enqueueJson,
   enqueuePaymentAction,
   enqueueWeighIn,
   flushQueue,
@@ -27,7 +28,13 @@ import {
 
 // Provide minimal globals queue.ts touches. fake-indexeddb gives us
 // indexedDB; we shim FormData/Blob via undici (built into Node 22).
-type FetchCall = { url: string; method: string; bodyKeys: string[] };
+type FetchCall = {
+  url: string;
+  method: string;
+  bodyKeys: string[];
+  bodyText: string | null;
+  contentType: string | null;
+};
 let calls: FetchCall[] = [];
 let nextResponses: Array<Response | Error> = [];
 
@@ -37,8 +44,12 @@ function mockFetch(): typeof fetch {
     const method = init?.method ?? "GET";
     const body = init?.body;
     let bodyKeys: string[] = [];
+    let bodyText: string | null = null;
     if (body instanceof FormData) bodyKeys = [...body.keys()];
-    calls.push({ url, method, bodyKeys });
+    else if (typeof body === "string") bodyText = body;
+    const headers = init?.headers as Record<string, string> | undefined;
+    const contentType = headers?.["Content-Type"] ?? headers?.["content-type"] ?? null;
+    calls.push({ url, method, bodyKeys, bodyText, contentType });
     const next = nextResponses.shift();
     if (!next) throw new Error("no mock response queued");
     if (next instanceof Error) throw next;
@@ -305,4 +316,56 @@ test("text() parse failure on error response does not crash flush", async () => 
   const r = await flushQueue();
   assert.equal(r.flushed, 0);
   assert.equal(r.remaining, 1, "job should still be queued for retry");
+});
+
+
+
+// ===== JSON-body queue (added 2026-04-29 for collect / adjust / reverse) =====
+
+test("enqueueJson stores a JSON POST and flushes with Content-Type: application/json", async () => {
+  await enqueueJson("/api/admin/payments/p1/collect", "POST", {
+    method: "cash",
+    amount_inr: 250,
+  });
+  assert.equal(await queueLength(), 1);
+
+  nextResponses.push(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  const r = await flushQueue();
+
+  assert.equal(r.flushed, 1);
+  assert.equal(await queueLength(), 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/admin/payments/p1/collect");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].contentType, "application/json");
+  assert.deepEqual(JSON.parse(calls[0].bodyText ?? "null"), {
+    method: "cash",
+    amount_inr: 250,
+  });
+});
+
+test("enqueueJson failure (5xx) keeps job and bumps attempts", async () => {
+  await enqueueJson("/api/admin/payments/p2/reverse", "POST", { reason: "wrong row" });
+  nextResponses.push(new Response("boom", { status: 503 }));
+
+  const r = await flushQueue();
+  assert.equal(r.flushed, 0);
+  assert.equal(r.remaining, 1);
+});
+
+test("mixed JSON + multipart queue drains in FIFO with correct content types", async () => {
+  await enqueueWeighIn(makeFd());
+  await enqueueJson("/api/admin/payments/p3/adjust-total", "POST", {
+    amount_inr: 600,
+  });
+  nextResponses.push(new Response("", { status: 200 }));
+  nextResponses.push(new Response("", { status: 200 }));
+
+  const r = await flushQueue();
+
+  assert.equal(r.flushed, 2);
+  assert.equal(calls[0].url, "/api/weighin");
+  assert.equal(calls[0].contentType, null, "multipart must NOT carry our JSON header");
+  assert.equal(calls[1].url, "/api/admin/payments/p3/adjust-total");
+  assert.equal(calls[1].contentType, "application/json");
 });

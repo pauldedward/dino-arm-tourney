@@ -208,6 +208,9 @@ async function main() {
   const nominalRows = regsLive.map((r) => ({
     chest_no: r.chest_no,
     full_name: r.full_name,
+    gender: (r as { gender?: string | null }).gender ?? null,
+    dob: (r as { dob?: string | null }).dob ?? null,
+    mobile: (r as { mobile?: string | null }).mobile ?? null,
     division: r.division,
     district: r.district,
     team: r.team,

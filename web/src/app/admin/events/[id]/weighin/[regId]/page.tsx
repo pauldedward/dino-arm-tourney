@@ -26,7 +26,7 @@ export default async function WeighInDetailPage({
   const { data: reg } = await svc
     .from("registrations")
     .select(
-      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, photo_url, is_para, weight_bump_up, events(name, id_card_event_title), payments(id, status, amount_inr)"
+      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, photo_url, is_para, gender, nonpara_classes, nonpara_hands, para_codes, para_hand, weight_overrides, events(name, id_card_event_title), payments(id, status, amount_inr)"
     )
     .eq("id", regId)
     .eq("event_id", eventId)
@@ -104,7 +104,19 @@ export default async function WeighInDetailPage({
         queueHref={queueHref}
         currentPhotoUrl={currentPhotoUrl}
         isPara={Boolean(reg.is_para)}
-        initialBumpUp={reg.weight_bump_up === true}
+        reg={{
+          gender: (reg.gender as "M" | "F" | null) ?? null,
+          nonpara_classes: (reg.nonpara_classes as string[] | null) ?? [],
+          nonpara_hands:
+            (reg.nonpara_hands as Array<"R" | "L" | "B" | null> | null) ?? [],
+          para_codes: (reg.para_codes as string[] | null) ?? [],
+          para_hand: (reg.para_hand as "R" | "L" | "B" | null) ?? null,
+        }}
+        initialOverrides={
+          Array.isArray(reg.weight_overrides)
+            ? (reg.weight_overrides as import("@/lib/rules/resolve").WeightOverride[])
+            : []
+        }
       />
 
       <section className="border-2 border-ink">

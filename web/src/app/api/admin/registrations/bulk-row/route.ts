@@ -12,6 +12,7 @@ import {
   type Hand,
 } from "@/lib/rules/registration-rules";
 import { wafBucketForWeight } from "@/lib/rules/waf-2025";
+import { sanitizeOverrides } from "@/lib/rules/resolve";
 import { maskAadhaar } from "@/lib/registration";
 import { feeFor, type RegistrationChannel } from "@/lib/payments/fee";
 
@@ -34,9 +35,15 @@ interface BulkRowBody {
   include_senior?: boolean;
   para_codes?: string[];
   para_hand?: Hand | null;
-  /** Non-para opt-in: place the entry one weight bucket above the
-   *  one the weight resolves to. Ignored for para entries. */
-  weight_bump_up?: boolean;
+  /** Operator picks: per-entry weight class overrides. Each must point
+   *  to a heavier bucket than auto; lighter picks are silently ignored
+   *  by the resolver. */
+  weight_overrides?: Array<{
+    scope: "nonpara" | "para";
+    code: string;
+    hand: "R" | "L";
+    bucket_code: string;
+  }>;
   photo_key?: string;
   photo_bytes?: number;
 
@@ -261,7 +268,7 @@ export async function POST(req: Request) {
     nonpara_hands: nonparaHandsArr.length > 0 ? nonparaHandsArr : null,
     para_codes: para,
     para_hand: para.length > 0 ? body.para_hand ?? null : null,
-    weight_bump_up: nonpara.length > 0 ? body.weight_bump_up === true : false,
+    weight_overrides: sanitizeOverrides(body.weight_overrides),
     photo_url: body.photo_key ?? null,
     photo_bytes: body.photo_bytes ?? null,
     paid_amount_inr: body.paid_amount_inr ?? 0,
@@ -404,7 +411,7 @@ export async function POST(req: Request) {
       total_fee_inr: totalFee,
       collected_inr: collectedEffective,
       channel,
-      weight_bump_up: nonpara.length > 0 ? body.weight_bump_up === true : false,
+      weight_overrides_count: sanitizeOverrides(body.weight_overrides).length,
       weighed_in: !!weighInId,
     },
   });

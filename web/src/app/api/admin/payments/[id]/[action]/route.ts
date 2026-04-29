@@ -53,15 +53,8 @@ export async function POST(
     .eq("status", "pending"); // guard against race
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Mirror registration status on verify: pending -> paid. Never regress
-  // past weighed_in / disqualified / withdrawn.
-  if (action === "verify" && existing.registration_id) {
-    await svc
-      .from("registrations")
-      .update({ status: "paid" })
-      .eq("id", existing.registration_id)
-      .eq("status", "pending");
-  }
+  // Post-0039: payment status is read from payment_summary.derived_status,
+  // not from a mirror column on registrations. Nothing to mirror here.
 
   await recordAudit({
     eventId,

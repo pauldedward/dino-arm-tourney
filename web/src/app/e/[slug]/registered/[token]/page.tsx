@@ -33,7 +33,7 @@ export default async function RegisteredPage({
   const [regRes, eventRes, userRes] = await Promise.all([
     svc
       .from("registrations")
-      .select("id, public_token, chest_no, full_name, initial, division, status, declared_weight_kg, event_id, athlete_id, gender, nonpara_classes, nonpara_hands, para_codes, para_hand, weight_bump_up")
+      .select("id, public_token, chest_no, full_name, initial, division, status, lifecycle_status, discipline_status, declared_weight_kg, event_id, athlete_id, gender, nonpara_classes, nonpara_hands, para_codes, para_hand, weight_overrides")
       .eq("public_token", token)
       .maybeSingle(),
     svc
@@ -112,7 +112,8 @@ export default async function RegisteredPage({
       (reg.nonpara_hands as RegistrationLite["nonpara_hands"]) ?? null,
     para_codes: (reg.para_codes as string[] | null) ?? [],
     para_hand: (reg.para_hand as RegistrationLite["para_hand"]) ?? null,
-    weight_bump_up: reg.weight_bump_up === true,
+    weight_overrides:
+      (reg.weight_overrides as RegistrationLite["weight_overrides"]) ?? null,
   };
   const declaredEntries = resolveEntries(regLite, null, refYear);
   const eligibleEntries = weighIn
@@ -127,10 +128,16 @@ export default async function RegisteredPage({
     ? declaredEntries.filter((e) => !eligibleCodes.has(e.category_code))
     : [];
 
+  const competing =
+    reg.lifecycle_status !== "withdrawn" &&
+    reg.discipline_status !== "disqualified" &&
+    // Tolerate pre-0039 rows that only have the legacy mirror.
+    reg.status !== "withdrawn" &&
+    reg.status !== "disqualified";
   const canEdit =
     isOwner &&
     regOpen &&
-    (reg.status === "pending" || reg.status === "paid") &&
+    competing &&
     payment?.status !== "verified";
 
   // All proofs the athlete has uploaded against this payment so far.

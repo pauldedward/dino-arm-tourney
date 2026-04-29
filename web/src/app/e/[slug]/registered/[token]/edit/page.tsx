@@ -30,7 +30,7 @@ export default async function EditRegistrationPage({
   const { data: reg } = await svc
     .from("registrations")
     .select(
-      "id, public_token, event_id, athlete_id, status, full_name, initial, dob, gender, mobile, aadhaar_masked, affiliation_kind, district, team, declared_weight_kg, nonpara_classes, nonpara_hands, para_codes, para_hand"
+      "id, public_token, event_id, athlete_id, status, lifecycle_status, discipline_status, full_name, initial, dob, gender, mobile, aadhaar_masked, affiliation_kind, district, team, declared_weight_kg, nonpara_classes, nonpara_hands, para_codes, para_hand"
     )
     .eq("public_token", token)
     .maybeSingle();
@@ -38,7 +38,12 @@ export default async function EditRegistrationPage({
   if (reg.athlete_id !== user.id) {
     redirect(`/e/${slug}/registered/${token}`);
   }
-  if (reg.status !== "pending" && reg.status !== "paid") {
+  if (
+    reg.lifecycle_status === "withdrawn" ||
+    reg.discipline_status === "disqualified" ||
+    reg.status === "withdrawn" ||
+    reg.status === "disqualified"
+  ) {
     redirect(`/e/${slug}/registered/${token}`);
   }
 

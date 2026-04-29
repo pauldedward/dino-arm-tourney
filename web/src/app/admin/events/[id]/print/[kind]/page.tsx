@@ -246,7 +246,6 @@ async function NominalPreview({
   return (
     <>
       <PreviewToolbar
-        pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         divisions={divisions}
         totalLabel={`${total} of ${all.length}`}
@@ -338,7 +337,7 @@ async function CategoryPreview({
     svc
       .from("registrations")
       .select(
-        "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_bump_up, status, checkin_status"
+        "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, status, lifecycle_status, discipline_status, checkin_status"
       )
       .eq("event_id", eventId),
     svc
@@ -356,8 +355,8 @@ async function CategoryPreview({
   const event = eventRes.data;
   const regs = regsRes.data;
   const wis = wisRes.data ?? [];
-  // Same eligibility rule as `/api/pdf/category`: any of paid (legacy or
-  // installment-completed), already-weighed-in, or checkin_status flag.
+  // Same eligibility rule as `/api/pdf/category`: lifecycle/discipline
+  // gate + (paid OR weighed-in).
   const derivedByReg = new Map<string, string>();
   for (const s of sumsRes.data ?? []) {
     derivedByReg.set(
@@ -368,6 +367,8 @@ async function CategoryPreview({
   const eligibleAll = (regs ?? []).filter((r) =>
     isFixtureEligible({
       regStatus: r.status,
+      lifecycleStatus: r.lifecycle_status as string | null,
+      disciplineStatus: r.discipline_status as string | null,
       derivedPaymentStatus: derivedByReg.get(r.id as string) ?? null,
       checkinStatus: r.checkin_status as string | null | undefined,
     }),
@@ -397,7 +398,8 @@ async function CategoryPreview({
         ),
       para_codes: (r.para_codes as string[] | null) ?? [],
       para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
-      weight_bump_up: r.weight_bump_up === true,
+      weight_overrides:
+        (r.weight_overrides as RegistrationLite["weight_overrides"]) ?? null,
     };
     return {
       ...lite,

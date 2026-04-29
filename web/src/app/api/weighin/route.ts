@@ -6,6 +6,7 @@ import { compressImage, ImageRejectedError } from "@/lib/image";
 import { putObject, mediaKey } from "@/lib/storage";
 import { recordAudit } from "@/lib/audit";
 import { isPaid } from "@/lib/payments/status";
+import { sanitizeOverrides } from "@/lib/rules/resolve";
 
 export const runtime = "nodejs";
 
@@ -41,14 +42,19 @@ export async function POST(req: NextRequest) {
   const measured = Number(measuredRaw);
   const file = form.get("file");
   const athleteFile = form.get("athlete_file");
-  // Optional non-para opt-in: when present, set/clear the persistent
-  // bump-up flag on the registration as part of the same write so the
-  // operator can change their mind at the scale.
-  const bumpRaw = form.get("weight_bump_up");
-  const weightBumpUp =
-    bumpRaw === null || bumpRaw === undefined
+  // Optional operator picks: per-entry weight class overrides. JSON
+  // string in the form field. Missing/empty means "don't touch".
+  const overridesRaw = form.get("weight_overrides");
+  const weightOverrides: unknown =
+    overridesRaw === null || overridesRaw === undefined || String(overridesRaw) === ""
       ? null
-      : String(bumpRaw) === "true" || String(bumpRaw) === "1";
+      : (() => {
+          try {
+            return JSON.parse(String(overridesRaw));
+          } catch {
+            return null;
+          }
+        })();
 
   if (!registrationId) {
     return NextResponse.json({ error: "registration_id required" }, { status: 400 });
@@ -63,7 +69,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient();
   const { data: reg } = await svc
     .from("registrations")
-    .select("id, event_id, status, is_para, weight_bump_up, payments(status)")
+    .select("id, event_id, status, is_para, weight_overrides, payments(status)")
     .eq("id", registrationId)
     .maybeSingle();
   if (!reg) {
@@ -134,29 +140,23 @@ export async function POST(req: NextRequest) {
       .eq("id", registrationId);
   }
 
-  // Persist the bump-up toggle if the operator changed it at the scale.
-  // No-op for para entries (silently ignored) and when the field wasn't
-  // submitted at all so older clients keep working unchanged.
-  let bumpChanged = false;
-  if (weightBumpUp !== null && !reg.is_para && weightBumpUp !== reg.weight_bump_up) {
+  // Persist the operator's per-entry weight overrides if supplied.
+  // The resolver silently ignores any pick lighter than the auto bucket,
+  // so we don't validate against weight here.
+  let overridesChanged = false;
+  if (Array.isArray(weightOverrides)) {
+    const cleaned = sanitizeOverrides(weightOverrides);
     await svc
       .from("registrations")
-      .update({ weight_bump_up: weightBumpUp })
+      .update({ weight_overrides: cleaned })
       .eq("id", registrationId);
-    bumpChanged = true;
+    overridesChanged = true;
   }
 
-  // Status machine: only flip paid → weighed_in. "Paid" is computed from
-  // payments.status (with a legacy fallback to registrations.status) so the
-  // weigh-in flow no longer drifts when the bulk-row writer skipped one of
-  // the two writes. "Weighed" itself is derived from weigh_ins presence,
-  // not from registrations.status.
-  if (isPaid(reg.status, reg.payments ?? null)) {
-    await svc
-      .from("registrations")
-      .update({ status: "weighed_in" })
-      .eq("id", registrationId);
-  }
+  // checkin_status is maintained by the trigger on weigh_ins (0029).
+  // Post-0039 we no longer mirror anything onto the deprecated
+  // registrations.status column — the weigh-in fact lives on
+  // checkin_status, and "paid" lives on payment_summary.derived_status.
 
   await recordAudit({
     eventId: reg.event_id,
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     payload: {
       registration_id: registrationId,
       measured_kg: measured,
-      ...(bumpChanged ? { weight_bump_up: weightBumpUp } : {}),
+      ...(overridesChanged ? { weight_overrides_updated: true } : {}),
     },
   });
 

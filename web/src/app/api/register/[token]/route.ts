@@ -73,16 +73,30 @@ export async function PATCH(
 
   const { data: reg } = await svc
     .from("registrations")
-    .select("id, public_token, event_id, athlete_id, status")
+    .select(
+      "id, public_token, event_id, athlete_id, status, lifecycle_status, discipline_status"
+    )
     .eq("public_token", token)
     .maybeSingle();
   if (!reg) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (reg.athlete_id !== user.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  if (reg.status !== "pending" && reg.status !== "paid") {
+  if (
+    reg.lifecycle_status === "withdrawn" ||
+    reg.discipline_status === "disqualified" ||
+    // Tolerate pre-0039 rows that only have the legacy mirror.
+    reg.status === "withdrawn" ||
+    reg.status === "disqualified"
+  ) {
     return NextResponse.json(
-      { error: `cannot edit after ${reg.status}` },
+      {
+        error: `cannot edit after ${
+          reg.discipline_status === "disqualified" || reg.status === "disqualified"
+            ? "disqualified"
+            : "withdrawn"
+        }`,
+      },
       { status: 409 }
     );
   }

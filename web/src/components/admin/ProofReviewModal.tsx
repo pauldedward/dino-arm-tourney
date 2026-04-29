@@ -21,8 +21,16 @@ interface Props {
   paymentId: string;
   caption?: string;
   initialStatus: string;
+  /**
+   * "readonly" hides the Verify/Reject footer actions. Used by the
+   * counter desk after capture so an operator can re-check what they
+   * just uploaded without accidentally signing off on it from the
+   * intake screen — verification still happens from the registrations
+   * table where the full payment history sits next to the row.
+   */
+  mode?: "review" | "readonly";
   onClose: () => void;
-  onResolved: (action: "verify" | "reject") => void;
+  onResolved?: (action: "verify" | "reject") => void;
 }
 
 function isPdf(url: string): boolean {
@@ -34,6 +42,7 @@ export default function ProofReviewModal({
   paymentId,
   caption,
   initialStatus,
+  mode = "review",
   onClose,
   onResolved,
 }: Props) {
@@ -94,7 +103,7 @@ export default function ProofReviewModal({
         }
         setStatus(action === "verify" ? "verified" : "rejected");
         setBusy(null);
-        onResolved(action);
+        onResolved?.(action);
       } catch (e) {
         setError((e as Error).message);
         setBusy(null);
@@ -125,7 +134,7 @@ export default function ProofReviewModal({
   }, [proofs.length, onClose]);
 
   const active = proofs[activeIdx] ?? null;
-  const canDecide = status === "pending" && proofs.length > 0;
+  const canDecide = mode === "review" && status === "pending" && proofs.length > 0;
 
   return (
     <div
@@ -276,11 +285,13 @@ export default function ProofReviewModal({
               </>
             ) : (
               <span className="font-mono text-[13px] text-ink/50">
-                {status === "verified"
-                  ? "Already verified"
-                  : status === "rejected"
-                    ? "Already rejected"
-                    : "No proof to decide"}
+                {mode === "readonly"
+                  ? "Read-only · verify from Registrations"
+                  : status === "verified"
+                    ? "Already verified"
+                    : status === "rejected"
+                      ? "Already rejected"
+                      : "No proof to decide"}
               </span>
             )}
           </div>

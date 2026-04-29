@@ -10,6 +10,7 @@ import {
   ageOnMatchDay,
   type Hand,
 } from "@/lib/rules/registration-rules";
+import { prettyNonparaClassName } from "@/lib/rules/category-label";
 
 interface EventShell {
   id: string;
@@ -616,7 +617,7 @@ export default function RegisterForm({
                   <option value="">Select class…</option>
                   {eligibleNonPara.map((c) => (
                     <option key={c.className} value={c.className}>
-                      {c.classFull} ({c.minAge}
+                      {prettyNonparaClassName(c.classFull)} ({c.minAge}
                       {c.maxAge === null ? "+" : `\u2013${c.maxAge}`})
                     </option>
                   ))}
@@ -626,8 +627,10 @@ export default function RegisterForm({
               {primaryClassName && (
                 <Field
                   label={`Hand — ${
-                    eligibleNonPara.find((c) => c.className === primaryClassName)
-                      ?.classFull ?? primaryClassName
+                    prettyNonparaClassName(
+                      eligibleNonPara.find((c) => c.className === primaryClassName)
+                        ?.classFull ?? primaryClassName,
+                    )
                   }`}
                   required
                 >

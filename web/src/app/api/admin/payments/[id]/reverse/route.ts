@@ -142,13 +142,7 @@ export async function POST(
         verified_at: null,
       })
       .eq("id", id);
-    if (existing.registration_id) {
-      await svc
-        .from("registrations")
-        .update({ status: "pending" })
-        .eq("id", existing.registration_id)
-        .eq("status", "paid");
-    }
+    // Post-0039: no mirror onto registrations.status.
   }
 
   await recordAudit({

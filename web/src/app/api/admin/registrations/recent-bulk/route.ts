@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
   // New orthogonal filters. UI sends one or both; absent → no filter.
   const payFilter = sp.get("pay") ?? ""; // "" | "paid" | "non-paid" (legacy: "partial" | "due")
   const checkinFilter = sp.get("checkin") ?? ""; // "" | "weighed-in" | "not-weighed-in" (legacy: "no-show" | "not-arrived")
+  const lifecycleFilter = sp.get("lifecycle") ?? ""; // "" | "active" | "withdrawn" | "disqualified"
 
   const svc = createServiceClient();
 
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
   let query = svc
     .from("registrations")
     .select(
-      "id, full_name, initial, chest_no, district, team, declared_weight_kg, weight_class_code, status, checkin_status, paid_amount_inr, payments(status, amount_inr, payment_collections(amount_inr, reversed_at)), weigh_ins(id)"
+      "id, full_name, initial, chest_no, district, team, declared_weight_kg, weight_class_code, status, lifecycle_status, discipline_status, checkin_status, paid_amount_inr, payments(id, status, amount_inr, payment_collections(amount_inr, reversed_at)), weigh_ins(id)"
     )
     .eq("event_id", eventId);
 
@@ -87,6 +88,17 @@ export async function GET(req: NextRequest) {
   } else if (checkin === "not-weighed-in") {
     // Legacy combo (no-show + not-arrived).
     query = query.neq("checkin_status", "weighed_in");
+  }
+
+  // Lifecycle/discipline axis. Disqualified takes precedence over withdrawn
+  // when both are set on a row, so the "withdrawn" pill must exclude DQ
+  // rows to match how the row badge picks its label.
+  if (lifecycleFilter === "active") {
+    query = query.eq("lifecycle_status", "active").eq("discipline_status", "clear");
+  } else if (lifecycleFilter === "withdrawn") {
+    query = query.eq("lifecycle_status", "withdrawn").eq("discipline_status", "clear");
+  } else if (lifecycleFilter === "disqualified") {
+    query = query.eq("discipline_status", "disqualified");
   }
 
   const [{ data, error }, { count: total }] = await Promise.all([
@@ -124,6 +136,7 @@ export async function GET(req: NextRequest) {
       declared_weight_kg: r.declared_weight_kg ?? null,
       weight_class_code: r.weight_class_code ?? null,
       payment_status: pay?.status ?? null,
+      payment_id: (pay as { id?: string } | null)?.id ?? null,
       paid_amount_inr: collectedInr || r.paid_amount_inr || null,
       total_fee_inr: totalInr,
       collected_inr: collectedInr,
@@ -135,7 +148,11 @@ export async function GET(req: NextRequest) {
         | "no_show"
         | null) ?? null,
       lifecycle:
-        r.status === "withdrawn"
+        r.discipline_status === "disqualified"
+          ? ("disqualified" as const)
+          : r.lifecycle_status === "withdrawn"
+          ? ("withdrawn" as const)
+          : r.status === "withdrawn"
           ? ("withdrawn" as const)
           : r.status === "disqualified"
           ? ("disqualified" as const)

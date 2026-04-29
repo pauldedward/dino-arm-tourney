@@ -37,7 +37,7 @@ export async function loadPaymentReport(
   let regQuery = svc
     .from("registrations")
     .select(
-      "id, chest_no, full_name, initial, division, district, team, youth_hand, senior_hand, status, event_id"
+      "id, chest_no, full_name, initial, division, district, team, youth_hand, senior_hand, status, lifecycle_status, discipline_status, event_id"
     )
     .eq("event_id", eventId)
     .order("chest_no", { ascending: true, nullsFirst: false })
@@ -190,7 +190,7 @@ export async function loadNominal(
   let regQuery = svc
     .from("registrations")
     .select(
-      "id, chest_no, full_name, division, district, team, declared_weight_kg, age_categories, status, checkin_status"
+      "id, chest_no, full_name, gender, dob, mobile, division, district, team, declared_weight_kg, age_categories, para_codes, para_hand, nonpara_classes, nonpara_hands, nonpara_hand, weight_overrides, status, lifecycle_status, discipline_status, checkin_status"
     )
     .eq("event_id", eventId)
     .order("full_name", { ascending: true })
@@ -210,7 +210,7 @@ export async function loadNominal(
       .limit(20000),
     svc
       .from("weigh_ins")
-      .select("registration_id, registrations!inner(event_id)")
+      .select("registration_id, measured_kg, registrations!inner(event_id)")
       .eq("registrations.event_id", eventId)
       .limit(20000),
   ]);
@@ -223,6 +223,7 @@ export async function loadNominal(
     })),
     (wiRes.data ?? []).map((w) => ({
       registration_id: w.registration_id as string,
+      measured_kg: (w.measured_kg as number | null) ?? null,
     })),
   );
 }
@@ -235,12 +236,17 @@ export async function loadCategory(
   svc: SvcClient,
   eventId: string
 ): Promise<CategoryRow[]> {
+  // Filter out withdrawn / DQ'd athletes — entries rows persist even after
+  // an athlete is pulled, so we must gate on lifecycle/discipline here so
+  // the printed Category Sheet matches the live competing roster.
   const { data, error } = await svc
     .from("entries")
     .select(
-      "category_code, registrations!inner(event_id, chest_no, full_name, district)"
+      "category_code, registrations!inner(event_id, chest_no, full_name, district, lifecycle_status, discipline_status, status)"
     )
-    .eq("registrations.event_id", eventId);
+    .eq("registrations.event_id", eventId)
+    .eq("registrations.lifecycle_status", "active")
+    .eq("registrations.discipline_status", "clear");
   if (error) throw new Error(error.message);
   const grouped = new Map<string, CategoryRow["athletes"]>();
   for (const e of data ?? []) {

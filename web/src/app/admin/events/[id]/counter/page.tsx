@@ -66,7 +66,7 @@ export default async function CounterDeskPage({
             prefetch
             className="border-2 border-ink px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
           >
-            All registrations →
+            All registrations&nbsp;→
           </PendingLink>
           <PendingLink
             href={`/admin/events/${event.slug}`}

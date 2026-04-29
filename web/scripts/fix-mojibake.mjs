@@ -49,6 +49,13 @@ for (const p of TARGETS) {
   if (!fs.existsSync(p)) continue;
   let s = fs.readFileSync(p, "utf8");
   let n = 0;
+  // Strip C1 control chars (U+0080..U+009F) — invisible junk leftover from
+  // cp1252-misdecoded UTF-8. Renders as a tofu-like glyph in the browser.
+  const stripped = s.replace(/[\u0080-\u009F]/g, "");
+  if (stripped.length !== s.length) {
+    n += s.length - stripped.length;
+    s = stripped;
+  }
   for (const [bad, good] of MAP) {
     const parts = s.split(bad);
     if (parts.length > 1) {

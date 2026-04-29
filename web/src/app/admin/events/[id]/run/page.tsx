@@ -132,7 +132,7 @@ export default async function RunPage({
             href={`/admin/events/${event.id}/standings`}
             className="border-2 border-ink px-3 py-2 font-mono text-xs uppercase tracking-wide hover:bg-ink hover:text-paper"
           >
-            Standings →
+            Standings&nbsp;→
           </Link>
           <Link
             href={`/admin/events/${event.id}`}

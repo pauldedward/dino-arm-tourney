@@ -50,7 +50,7 @@ export default function PublishControls({
       <div className="mt-3 flex flex-wrap gap-3">
         {status === "draft" && (
           <Big onClick={() => act("publish", "Publish this event and open registrations now?")} disabled={!!busy} color="rust">
-            {busy === "publish" ? "Publishing…" : "Publish & open registrations →"}
+            {busy === "publish" ? "Publishing…" : "Publish & open registrations\u00a0→"}
           </Big>
         )}
         {status !== "draft" && regOpen && (

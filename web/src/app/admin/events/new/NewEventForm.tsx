@@ -415,7 +415,7 @@ export default function NewEventForm({ organizations }: { organizations: Org[] }
               disabled={!canNext}
               className="border-2 border-ink bg-ink px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.2em] text-bone disabled:opacity-40"
             >
-              Next →
+              Next&nbsp;→
             </button>
           ) : (
             <button

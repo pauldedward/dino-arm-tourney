@@ -161,7 +161,7 @@ export default async function PrintPage({
                 className="block"
               >
                 <p className="font-display text-2xl font-black tracking-tight group-hover:text-rust">
-                  {s.title} →
+                  {s.title}&nbsp;→
                 </p>
                 <p className="mt-1 font-mono text-[13px] text-ink/60">{s.blurb}</p>
               </PendingLink>

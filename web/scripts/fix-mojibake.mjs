@@ -1,11 +1,20 @@
 // One-shot mojibake fixer. Idempotent.
+// Walks web/src for .ts/.tsx and replaces known cp1252-misdecoded UTF-8.
 import fs from "node:fs";
 import path from "node:path";
 
-const TARGETS = [
-  "web/src/app/admin/events/[id]/print/[kind]/page.tsx",
-  "web/src/app/register-super-admin/RegisterForm.tsx",
-];
+const ROOT = path.resolve("web/src");
+
+function walk(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else if (/\.(tsx?|mdx?)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+const TARGETS = walk(ROOT);
 
 // Common Windows-cp1252-misdecoded UTF-8 sequences -> intended chars.
 // Order matters: longer sequences first so they win over shorter prefixes.
@@ -18,6 +27,9 @@ const MAP = [
   ["Ã¢â‚¬Å“", "“"],
   ["Ã¢â‚¬Ëœ", "‘"],
   ["Ã¢â‚¬â„¢", "’"],
+  ["â†'", "→"],
+  ["â†’", "→"],
+  ["â†", "←"],
   ["â€”", "—"],
   ["â€“", "–"],
   ["â€¦", "…"],
@@ -33,8 +45,7 @@ const MAP = [
 ];
 
 let total = 0;
-for (const rel of TARGETS) {
-  const p = path.resolve(rel);
+for (const p of TARGETS) {
   if (!fs.existsSync(p)) continue;
   let s = fs.readFileSync(p, "utf8");
   let n = 0;
@@ -45,8 +56,10 @@ for (const rel of TARGETS) {
       s = parts.join(good);
     }
   }
-  fs.writeFileSync(p, s, "utf8");
-  console.log(`${rel}: ${n} replacements`);
-  total += n;
+  if (n > 0) {
+    fs.writeFileSync(p, s, "utf8");
+    console.log(`${path.relative(process.cwd(), p)}: ${n} replacements`);
+    total += n;
+  }
 }
 console.log(`\ntotal: ${total}`);

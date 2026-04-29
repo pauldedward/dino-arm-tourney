@@ -154,14 +154,14 @@ export default async function PrintPreviewPage({
             href={`/admin/events/${eventSlug}/print`}
             className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
           >
-            â† all sheets
+            ← all sheets
           </Link>
           {kind === "id-cards" && (
             <Link
               href={`/admin/events/${eventSlug}/branding`}
               className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
             >
-              edit ID card branding â†’
+              edit ID card branding →
             </Link>
           )}
         </div>

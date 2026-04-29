@@ -38,6 +38,46 @@ describe("summarisePayment", () => {
     assert.equal(s.remaining_inr, 0);
     assert.equal(s.fully_collected, true);
   });
+
+  it("splits received vs waived by collection method", () => {
+    const s = summarisePayment(500, [
+      { amount_inr: 200, method: "cash", reversed_at: null },
+      { amount_inr: 100, method: "manual_upi", reversed_at: null },
+      { amount_inr: 200, method: "waiver", reversed_at: null },
+    ]);
+    assert.equal(s.collected_inr, 500);
+    assert.equal(s.received_inr, 300);
+    assert.equal(s.waived_inr, 200);
+    assert.equal(s.remaining_inr, 0);
+    assert.equal(s.fully_collected, true);
+  });
+
+  it("a fully waived payment has received = 0 but is still verified", () => {
+    const s = summarisePayment(500, [
+      { amount_inr: 500, method: "waiver", reversed_at: null },
+    ]);
+    assert.equal(s.received_inr, 0);
+    assert.equal(s.waived_inr, 500);
+    assert.equal(s.derived_status, "verified");
+  });
+
+  it("ignores reversed waivers", () => {
+    const s = summarisePayment(500, [
+      { amount_inr: 200, method: "cash", reversed_at: null },
+      { amount_inr: 300, method: "waiver", reversed_at: "2026-04-29T10:00:00Z" },
+    ]);
+    assert.equal(s.received_inr, 200);
+    assert.equal(s.waived_inr, 0);
+    assert.equal(s.remaining_inr, 300);
+  });
+
+  it("treats collections without an explicit method as received (legacy)", () => {
+    const s = summarisePayment(500, [
+      { amount_inr: 500, reversed_at: null },
+    ]);
+    assert.equal(s.received_inr, 500);
+    assert.equal(s.waived_inr, 0);
+  });
 });
 
 describe("planCollection", () => {

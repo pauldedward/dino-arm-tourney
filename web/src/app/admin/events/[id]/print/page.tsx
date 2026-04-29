@@ -107,13 +107,13 @@ export default async function PrintPage({
   return (
     <div className="space-y-8">
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
           {event.name} · Match-day printing
         </p>
         <h1 className="mt-2 font-display text-5xl font-black tracking-tight">
           Sheets &amp; exports
         </h1>
-        <p className="mt-2 font-mono text-xs text-ink/60">
+        <p className="mt-2 font-mono text-[13px] text-ink/60">
           Each card opens an on-screen preview and offers PDF + XLSX
           downloads where available — no separate pages, no duplicated
           tiles.
@@ -121,7 +121,7 @@ export default async function PrintPage({
         <PendingLink
           href={`/admin/events/${eventSlug}`}
           prefetch
-          className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+          className="mt-3 inline-block font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
         >
           ← event
         </PendingLink>
@@ -140,7 +140,7 @@ export default async function PrintPage({
           <p className="font-display text-xl font-black tracking-tight">
             Fixtures &amp; brackets
           </p>
-          <p className="mt-1 font-mono text-[11px] text-ink/60">
+          <p className="mt-1 font-mono text-[13px] text-ink/60">
             {(fixturesCount ?? 0).toLocaleString("en-IN")} match{(fixturesCount ?? 0) === 1 ? "" : "es"} currently
             in the bracket. Rebuild after any weigh-in change.
           </p>
@@ -163,7 +163,7 @@ export default async function PrintPage({
                 <p className="font-display text-2xl font-black tracking-tight group-hover:text-rust">
                   {s.title} →
                 </p>
-                <p className="mt-1 font-mono text-xs text-ink/60">{s.blurb}</p>
+                <p className="mt-1 font-mono text-[13px] text-ink/60">{s.blurb}</p>
               </PendingLink>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -172,7 +172,7 @@ export default async function PrintPage({
                   href={`/api/pdf/${s.kind}?event=${eventId}`}
                   target="_blank"
                   rel="noopener"
-                  className="border-2 border-ink bg-paper px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-ink hover:text-paper"
+                  className="border-2 border-ink bg-paper px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-ink hover:text-paper"
                 >
                   PDF ↗
                 </a>
@@ -180,7 +180,7 @@ export default async function PrintPage({
               {s.hasXlsx && (
                 <a
                   href={`/api/admin/sheets/${s.kind}?event_id=${eventId}`}
-                  className="border-2 border-ink bg-volt px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-rust hover:text-paper"
+                  className="border-2 border-ink bg-volt px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-rust hover:text-paper"
                 >
                   XLSX ↓
                 </a>
@@ -190,7 +190,7 @@ export default async function PrintPage({
                   key={x.label}
                   href={x.href(eventId)}
                   title={x.title}
-                  className="border-2 border-ink bg-paper px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-ink hover:text-paper"
+                  className="border-2 border-ink bg-paper px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-ink hover:text-paper"
                 >
                   {x.label}
                 </a>
@@ -198,7 +198,7 @@ export default async function PrintPage({
               <PendingLink
                 href={`/admin/events/${eventSlug}/print/${s.kind}`}
                 prefetch
-                className="ml-auto border-2 border-ink/40 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:border-ink"
+                className="ml-auto border-2 border-ink/40 px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:border-ink"
               >
                 preview
               </PendingLink>

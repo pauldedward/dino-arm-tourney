@@ -109,6 +109,8 @@ async function buildPaymentReport(
     views: [{ state: "frozen", ySplit: 5 }],
     properties: { defaultRowHeight: 18 },
   });
+  // 10 cols: Chest, Athlete, Team, Category, Total, Received, Waived,
+  // Paid (received+waived), Due, Paid by.
   ws.columns = [
     { width: 14 },
     { width: 28 },
@@ -117,10 +119,13 @@ async function buildPaymentReport(
     { width: 12 },
     { width: 12 },
     { width: 12 },
+    { width: 12 },
+    { width: 12 },
     { width: 18 },
   ];
+  const COL_COUNT = 10;
 
-  ws.mergeCells("A1:H1");
+  ws.mergeCells("A1:J1");
   const title = ws.getCell("A1");
   title.value = `${eventName} — Payment Report`;
   title.font = { name: "Calibri", size: 18, bold: true, color: { argb: "FF1F4E78" } };
@@ -128,27 +133,31 @@ async function buildPaymentReport(
   ws.getRow(1).height = 28;
 
   setPair(ws, 2, "A", "Total Athletes", totals.total_athletes);
-  setPair(ws, 2, "C", "Total Paid", totals.total_paid);
-  setPair(ws, 2, "E", "Total Due", totals.total_due);
-  setPair(ws, 3, "A", "% Paid", `${round2(totals.percent_paid)}%`);
+  setPair(ws, 2, "C", "Total Billable", totals.total_billable);
+  setPair(ws, 2, "E", "Total Waived", totals.total_waived);
+  setPair(ws, 2, "G", "Waived athletes", totals.waived_n);
+  setPair(ws, 2, "I", "Effective Total", totals.total_effective);
+  setPair(ws, 3, "A", "Total Received", totals.total_received);
+  setPair(ws, 3, "C", "Total Due", totals.total_due);
+  setPair(ws, 3, "E", "% Collected", `${round2(totals.percent_paid)}%`);
   setPair(
     ws,
     3,
-    "C",
-    "Avg Paid",
-    totals.total_athletes ? round2(totals.total_paid / totals.total_athletes) : 0
+    "G",
+    "Avg Received",
+    totals.total_athletes ? round2(totals.total_received / totals.total_athletes) : 0
   );
   setPair(
     ws,
     3,
-    "E",
+    "I",
     "Avg Due",
     totals.total_athletes ? round2(totals.total_due / totals.total_athletes) : 0
   );
-  styleSummaryRow(ws.getRow(2), { italic: false });
-  styleSummaryRow(ws.getRow(3), { italic: true });
+  styleSummaryRow(ws.getRow(2), { italic: false }, COL_COUNT);
+  styleSummaryRow(ws.getRow(3), { italic: true }, COL_COUNT);
 
-  for (let c = 1; c <= 8; c++) {
+  for (let c = 1; c <= COL_COUNT; c++) {
     ws.getCell(4, c).border = {
       top: { style: "dashed", color: { argb: "FF92D050" } },
     };
@@ -162,6 +171,8 @@ async function buildPaymentReport(
     "Team / District",
     "Category",
     "Total ₹",
+    "Received ₹",
+    "Waived ₹",
     "Paid ₹",
     "Due ₹",
     "Paid by",
@@ -188,32 +199,37 @@ async function buildPaymentReport(
       r.team_or_district ?? "",
       r.category,
       r.total_inr,
+      r.received_inr,
+      r.waived_inr,
       r.paid_inr,
       r.due_inr,
       r.paid_by ?? "",
     ];
-    for (let c = 1; c <= 8; c++) {
+    for (let c = 1; c <= COL_COUNT; c++) {
       const cell = row.getCell(c);
       cell.border = thinBorder("FFBFBFBF");
       cell.alignment = { vertical: "middle" };
-      if (c >= 5 && c <= 7) cell.numFmt = "#,##0";
+      if (c >= 5 && c <= 9) cell.numFmt = "#,##0";
     }
     rowIdx++;
   }
 
   const totalRow = ws.getRow(rowIdx);
   totalRow.getCell(4).value = "GRAND TOTAL";
-  totalRow.getCell(6).value = totals.total_paid;
-  totalRow.getCell(7).value = totals.total_due;
-  for (let c = 1; c <= 8; c++) {
+  totalRow.getCell(5).value = totals.total_billable;
+  totalRow.getCell(6).value = totals.total_received;
+  totalRow.getCell(7).value = totals.total_waived;
+  totalRow.getCell(8).value = totals.total_paid;
+  totalRow.getCell(9).value = totals.total_due;
+  for (let c = 1; c <= COL_COUNT; c++) {
     const cell = totalRow.getCell(c);
     cell.font = { bold: true };
     cell.border = thinBorder("FF000000");
-    if (c >= 5 && c <= 7) cell.numFmt = "#,##0";
+    if (c >= 5 && c <= 9) cell.numFmt = "#,##0";
   }
   totalRow.getCell(4).alignment = { horizontal: "right" };
 
-  ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: 8 } };
+  ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: COL_COUNT } };
 }
 
 /* ------------------------------------------------------------------ */
@@ -453,8 +469,12 @@ function setPair(
   ws.getCell(`${valCol}${row}`).value = value;
 }
 
-function styleSummaryRow(row: ExcelJS.Row, opts: { italic: boolean }) {
-  for (let c = 1; c <= 6; c++) {
+function styleSummaryRow(
+  row: ExcelJS.Row,
+  opts: { italic: boolean },
+  colCount = 6,
+) {
+  for (let c = 1; c <= colCount; c++) {
     const cell = row.getCell(c);
     if (opts.italic) {
       const f = cell.font ?? {};

@@ -33,7 +33,7 @@ export function DistrictSummary({
           <h2 className="font-display text-xl font-black tracking-tight">
             By district
           </h2>
-          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/60">
+          <p className="mt-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/60">
             ₹{grandCollected.toLocaleString("en-IN")} collected ·{" "}
             <span className={grandPending > 0 ? "text-rust" : ""}>
               ₹{grandPending.toLocaleString("en-IN")} pending
@@ -43,7 +43,7 @@ export function DistrictSummary({
         <PendingLink
           href={`/admin/events/${eventSlug}/registrations?group=district`}
           prefetch
-          className="border-2 border-ink px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/40"
+          className="border-2 border-ink px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/40"
         >
           Open grouped view →
         </PendingLink>
@@ -64,7 +64,7 @@ export function DistrictSummary({
                 >
                   {t.district}
                 </PendingLink>
-                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+                <p className="mt-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
                   {t.athletes_n} athlete{t.athletes_n === 1 ? "" : "s"}
                 </p>
               </div>
@@ -80,16 +80,16 @@ export function DistrictSummary({
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <p className="mt-1 text-right font-mono text-[10px] tabular-nums text-ink/60">
+                <p className="mt-1 text-right font-mono text-[12px] tabular-nums text-ink/60">
                   {t.collected_n}/{t.athletes_n} paid
                 </p>
               </div>
               <div className="w-32 text-right">
-                <p className="font-mono text-xs tabular-nums text-moss">
+                <p className="font-mono text-[13px] tabular-nums text-moss">
                   ₹{t.collected_inr.toLocaleString("en-IN")}
                 </p>
                 {t.pending_inr > 0 && (
-                  <p className="font-mono text-[11px] tabular-nums text-rust">
+                  <p className="font-mono text-[13px] tabular-nums text-rust">
                     ₹{t.pending_inr.toLocaleString("en-IN")} owed
                   </p>
                 )}

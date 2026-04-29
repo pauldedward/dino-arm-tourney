@@ -15,13 +15,24 @@
 export interface CollectionLike {
   amount_inr: number;
   reversed_at: string | null;
+  /**
+   * Optional for legacy callers (older tests / migrations). When omitted
+   * the row is treated as real money — i.e. it counts toward `received_inr`
+   * just like cash. Modern call-sites always pass the actual method so the
+   * waiver split is honest.
+   */
+  method?: "cash" | "manual_upi" | "razorpay" | "waiver" | string;
 }
 
 export interface PaymentSummary {
   /** Total fee owed (mutable via adjust-total). */
   total_inr: number;
-  /** Sum of active (non-reversed) collections. */
+  /** Sum of active (non-reversed) collections. = received + waived. */
   collected_inr: number;
+  /** Active collections whose method is NOT 'waiver' — real money in. */
+  received_inr: number;
+  /** Active collections with method = 'waiver' — concession, not money. */
+  waived_inr: number;
   /** total - collected, never negative. */
   remaining_inr: number;
   /** True iff collected >= total AND total > 0. */
@@ -45,15 +56,22 @@ export function summarisePayment(
   collections: readonly CollectionLike[]
 ): PaymentSummary {
   const total = Math.max(0, Math.floor(totalInr));
-  const collected = collections.reduce(
-    (s, c) => (c.reversed_at ? s : s + Math.max(0, c.amount_inr)),
-    0
-  );
+  let received = 0;
+  let waived = 0;
+  for (const c of collections) {
+    if (c.reversed_at) continue;
+    const amt = Math.max(0, c.amount_inr);
+    if (c.method === "waiver") waived += amt;
+    else received += amt;
+  }
+  const collected = received + waived;
   const remaining = Math.max(0, total - collected);
   const fully = total > 0 && collected >= total;
   return {
     total_inr: total,
     collected_inr: collected,
+    received_inr: received,
+    waived_inr: waived,
     remaining_inr: remaining,
     fully_collected: fully,
     derived_status: fully ? "verified" : "pending",

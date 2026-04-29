@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const { data: regs, error: regErr } = await svc
     .from("registrations")
     .select(
-      "id, chest_no, declared_weight_kg, district, team, gender, nonpara_classes, nonpara_hand, nonpara_hands, para_codes, para_hand, status"
+      "id, chest_no, declared_weight_kg, district, team, gender, nonpara_classes, nonpara_hand, nonpara_hands, para_codes, para_hand, weight_bump_up, status"
     )
     .eq("event_id", eventId)
     .in("status", ["pending", "paid", "weighed_in"])
@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
         ),
       para_codes: (r.para_codes as string[] | null) ?? [],
       para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
+      weight_bump_up: r.weight_bump_up === true,
     };
     const resolved = resolveEntries(lite, latestWi.get(r.id) ?? null, refYear);
     for (const e of resolved) {

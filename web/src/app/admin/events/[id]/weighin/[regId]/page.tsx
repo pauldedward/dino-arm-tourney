@@ -26,7 +26,7 @@ export default async function WeighInDetailPage({
   const { data: reg } = await svc
     .from("registrations")
     .select(
-      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, photo_url, events(name, id_card_event_title), payments(id, status, amount_inr)"
+      "id, event_id, chest_no, full_name, initial, division, district, team, declared_weight_kg, weight_class_code, status, photo_url, is_para, weight_bump_up, events(name, id_card_event_title), payments(id, status, amount_inr)"
     )
     .eq("id", regId)
     .eq("event_id", eventId)
@@ -103,6 +103,8 @@ export default async function WeighInDetailPage({
         declared={reg.declared_weight_kg ?? null}
         queueHref={queueHref}
         currentPhotoUrl={currentPhotoUrl}
+        isPara={Boolean(reg.is_para)}
+        initialBumpUp={reg.weight_bump_up === true}
       />
 
       <section className="border-2 border-ink">

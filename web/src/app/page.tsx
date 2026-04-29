@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import PaymentModeBadge from "@/components/PaymentModeBadge";
 import { createClient } from "@/lib/db/supabase-server";
 import { createServiceClient } from "@/lib/db/supabase-service";
 import { roleAtLeast, type Role } from "@/lib/auth/roles";
@@ -37,7 +38,7 @@ export default async function LandingPage({
 
   const { data: events } = await supabase
     .from("events")
-    .select("id, slug, name, status, starts_at, venue_city, venue_state, cover_url, registration_published_at, registration_closed_at, primary_color, accent_color")
+    .select("id, slug, name, status, starts_at, venue_city, venue_state, cover_url, registration_published_at, registration_closed_at, primary_color, accent_color, payment_mode")
     .not("status", "in", "(draft,archived)")
     .order("starts_at", { ascending: true });
 
@@ -139,6 +140,9 @@ export default async function LandingPage({
                     })}{" "}
                     · {e.venue_city ?? "TBA"}, {e.venue_state ?? "Tamil Nadu"}
                   </p>
+                  <div className="mt-3">
+                    <PaymentModeBadge mode={e.payment_mode} variant="long" />
+                  </div>
                   <div className="mt-4 flex items-center gap-4">
                     <Link
                       href={`/e/${e.slug}`}

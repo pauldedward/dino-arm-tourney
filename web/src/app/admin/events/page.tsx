@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/db/supabase-service";
 import { requireRole } from "@/lib/auth/roles";
 import PendingLink from "@/components/PendingLink";
 import Pagination from "@/components/admin/Pagination";
+import PaymentModeBadge from "@/components/PaymentModeBadge";
 import DeleteEventButton from "./DeleteEventButton";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export default async function EventsList({
   let query = svc
     .from("events")
     .select(
-      "id, slug, name, status, starts_at, venue_city, venue_state, registration_published_at, registration_closed_at",
+      "id, slug, name, status, starts_at, venue_city, venue_state, registration_published_at, registration_closed_at, payment_mode",
       { count: "estimated" }
     )
     .order("starts_at", { ascending: false })
@@ -128,6 +129,7 @@ export default async function EventsList({
               <th className="px-4 py-3">Venue</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Registration</th>
+              <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -137,7 +139,7 @@ export default async function EventsList({
             ))}
             {(!events || events.length === 0) && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center font-mono text-xs text-ink/50">
+                <td colSpan={7} className="px-4 py-8 text-center font-mono text-xs text-ink/50">
                   No events yet. Click “New event” to create the first one.
                 </td>
               </tr>
@@ -175,6 +177,7 @@ function EventRow({
     venue_state: string | null;
     registration_published_at: string | null;
     registration_closed_at: string | null;
+    payment_mode: string | null;
   };
   isSuper: boolean;
 }) {
@@ -224,6 +227,9 @@ function EventRow({
         <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${regOpen ? "text-rust" : "text-ink/50"}`}>
           {regLabel}
         </span>
+      </td>
+      <td className="px-4 py-3">
+        <PaymentModeBadge mode={event.payment_mode} variant="short" />
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2">

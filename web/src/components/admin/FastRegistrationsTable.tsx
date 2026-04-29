@@ -922,8 +922,8 @@ export default function FastRegistrationsTable({
             ) : null}
           </p>
         </td>
-        <td className="px-3 py-2 font-mono text-xs">{r.division ?? "—"}</td>
-        <td className="px-3 py-2 font-mono text-xs text-ink/70">
+        <td className="px-3 py-2 font-mono text-[13px]">{r.division ?? "—"}</td>
+        <td className="px-3 py-2 font-mono text-[13px] text-ink/70">
           {inDistrictView
             ? (r.team ?? "—")
             : (r.district ?? r.team ?? "—")}
@@ -931,7 +931,7 @@ export default function FastRegistrationsTable({
         <td className="px-3 py-2 text-right font-mono tabular-nums">
           {r.declared_weight_kg ?? "—"}
         </td>
-        <td className="px-3 py-2 font-mono text-[11px]">
+        <td className="px-3 py-2 font-mono text-[13px]">
           <ClassesCell row={r} />
         </td>
         <td className="px-3 py-2">
@@ -949,7 +949,7 @@ export default function FastRegistrationsTable({
                   e.stopPropagation();
                   viewProof(p.id);
                 }}
-                className="border border-ink px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-kraft/30"
+                className="border border-ink px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] hover:bg-kraft/30"
               >
                 Proof
               </button>
@@ -966,7 +966,7 @@ export default function FastRegistrationsTable({
                     label: `${r.chest_no ? `${r.chest_no} · ` : ""}${r.full_name ?? ""}`,
                   });
                 }}
-                className="border border-ink bg-ink px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-bone hover:bg-rust"
+                className="border border-ink bg-ink px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-bone hover:bg-rust"
               >
                 Collect ₹{remainingInr(p).toLocaleString("en-IN")}
               </button>
@@ -988,11 +988,11 @@ export default function FastRegistrationsTable({
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
+          <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
             {scope.eventId ? `Event · ${scope.eventName}` : "Across all events"}
           </p>
           <h1 className="mt-2 font-display text-5xl font-black tracking-tight">Registrations</h1>
-          <p className="mt-1 font-mono text-[10px] text-ink/50">
+          <p className="mt-1 font-mono text-[12px] text-ink/50">
             <kbd className="border border-ink/40 px-1">/</kbd> search ·{" "}
             <kbd className="border border-ink/40 px-1">j/k</kbd> move ·{" "}
             <kbd className="border border-ink/40 px-1">x</kbd> select ·{" "}
@@ -1008,7 +1008,7 @@ export default function FastRegistrationsTable({
             <PendingLink
               href={`/admin/events/${scope.eventSlug ?? scope.eventId}/counter`}
               prefetch
-              className="inline-flex items-center gap-2 border-2 border-ink bg-ink px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
+              className="inline-flex items-center gap-2 border-2 border-ink bg-ink px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
             >
               <span
                 aria-hidden
@@ -1021,7 +1021,7 @@ export default function FastRegistrationsTable({
           )}
           <a
             href={`/api/admin/registrations.csv?${exportParams}`}
-            className="border-2 border-ink px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
+            className="border-2 border-ink px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
           >
             Export CSV ↓
           </a>
@@ -1029,7 +1029,7 @@ export default function FastRegistrationsTable({
             <PendingLink
               href={`/admin/events/${scope.eventSlug ?? scope.eventId}`}
               prefetch
-              className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+              className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
             >
               ← event
             </PendingLink>
@@ -1040,7 +1040,7 @@ export default function FastRegistrationsTable({
       {/* Filter bar — instant, no URL push */}
       <div className="flex flex-wrap items-end gap-3 border-2 border-ink p-3">
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Search</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Search</span>
           <input
             id="regs-search-input"
             value={filters.q}
@@ -1050,7 +1050,7 @@ export default function FastRegistrationsTable({
           />
         </label>
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Division</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Division</span>
           <select
             name="filter-division"
             value={filters.division}
@@ -1065,7 +1065,7 @@ export default function FastRegistrationsTable({
           </select>
         </label>
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Entry</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Entry</span>
           <select
             name="filter-entry"
             value={filters.entry}
@@ -1079,7 +1079,7 @@ export default function FastRegistrationsTable({
           </select>
         </label>
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Check-in</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Check-in</span>
           <select
             name="filter-checkin"
             value={filters.checkin}
@@ -1093,7 +1093,7 @@ export default function FastRegistrationsTable({
           </select>
         </label>
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Payment</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Payment</span>
           <select
             name="filter-payment"
             value={filters.payment}
@@ -1111,18 +1111,18 @@ export default function FastRegistrationsTable({
           <button
             type="button"
             onClick={() => setFilters({ q: "", division: "", entry: "", checkin: "", payment: "" })}
-            className="h-10 border-2 border-ink/30 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+            className="h-10 border-2 border-ink/30 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
           >
             Clear
           </button>
         )}
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">View</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">View</span>
           <div className="mt-1 flex border-2 border-ink">
             <button
               type="button"
               onClick={() => setGroupBy("none")}
-              className={`px-3 py-2 font-mono text-[11px] uppercase tracking-[0.2em] ${
+              className={`px-3 py-2 font-mono text-[13px] uppercase tracking-[0.2em] ${
                 groupBy === "none" ? "bg-ink text-bone" : "bg-bone text-ink"
               }`}
             >
@@ -1131,7 +1131,7 @@ export default function FastRegistrationsTable({
             <button
               type="button"
               onClick={() => setGroupBy("district")}
-              className={`border-l-2 border-ink px-3 py-2 font-mono text-[11px] uppercase tracking-[0.2em] ${
+              className={`border-l-2 border-ink px-3 py-2 font-mono text-[13px] uppercase tracking-[0.2em] ${
                 groupBy === "district" ? "bg-ink text-bone" : "bg-bone text-ink"
               }`}
             >
@@ -1146,7 +1146,7 @@ export default function FastRegistrationsTable({
               onClick={() =>
                 setCollapsedKeys(new Set(groups.map((g) => g.key)))
               }
-              className="h-10 border-2 border-ink/30 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+              className="h-10 border-2 border-ink/30 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
               title="Collapse every district group"
             >
               Collapse all
@@ -1154,14 +1154,14 @@ export default function FastRegistrationsTable({
             <button
               type="button"
               onClick={() => setCollapsedKeys(new Set())}
-              className="h-10 border-2 border-ink/30 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+              className="h-10 border-2 border-ink/30 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
               title="Expand every district group"
             >
               Expand all
             </button>
           </div>
         )}
-        <div className="ml-auto font-mono text-[10px] text-ink/50">
+        <div className="ml-auto font-mono text-[12px] text-ink/50">
           {state.loading ? (
             <Spinner variant="inline" label="Loading" />
           ) : (
@@ -1173,14 +1173,14 @@ export default function FastRegistrationsTable({
       {/* Bulk action bar — sticky when active */}
       {state.selected.size > 0 && (
         <div className="sticky top-[56px] z-20 flex flex-wrap items-center gap-2 border-2 border-rust bg-rust/10 p-3">
-          <span className="font-mono text-xs font-bold text-rust">
+          <span className="font-mono text-[13px] font-bold text-rust">
             {state.selected.size} selected
           </span>
           <button
             type="button"
             onClick={() => bulkPaymentAction("verify")}
             disabled={selectedPaymentIds.length === 0}
-            className="border-2 border-moss bg-moss px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-white disabled:opacity-40"
+            className="border-2 border-moss bg-moss px-3 py-1 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-white disabled:opacity-40"
           >
             Verify ({selectedPaymentIds.length})
           </button>
@@ -1188,7 +1188,7 @@ export default function FastRegistrationsTable({
             type="button"
             onClick={() => bulkPaymentAction("reject")}
             disabled={selectedPaymentIds.length === 0}
-            className="border-2 border-rust px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-rust disabled:opacity-40"
+            className="border-2 border-rust px-3 py-1 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-rust disabled:opacity-40"
           >
             Reject ({selectedPaymentIds.length})
           </button>
@@ -1204,21 +1204,21 @@ export default function FastRegistrationsTable({
               })
             }
             disabled={selectedCollectablePayments.length === 0}
-            className="border-2 border-ink bg-ink px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-bone disabled:opacity-40"
+            className="border-2 border-ink bg-ink px-3 py-1 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone disabled:opacity-40"
           >
             Collect ₹{selectedCollectTotal.toLocaleString("en-IN")} ({selectedCollectablePayments.length})
           </button>
           <button
             type="button"
             onClick={bulkDelete}
-            className="border-2 border-rust bg-rust px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-white"
+            className="border-2 border-rust bg-rust px-3 py-1 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-white"
           >
             Delete
           </button>
           <button
             type="button"
             onClick={() => dispatch({ type: "select.clear" })}
-            className="border-2 border-ink/40 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em]"
+            className="border-2 border-ink/40 px-3 py-1 font-mono text-[13px] uppercase tracking-[0.2em]"
           >
             Clear
           </button>
@@ -1226,29 +1226,29 @@ export default function FastRegistrationsTable({
             <button
               type="button"
               onClick={selectAllMatching}
-              className="border-2 border-ink px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] hover:bg-kraft/30"
+              className="border-2 border-ink px-3 py-1 font-mono text-[13px] uppercase tracking-[0.2em] hover:bg-kraft/30"
             >
               Select all {state.total} matching
             </button>
           )}
           {state.flash && (
-            <span className="ml-auto font-mono text-[11px] text-ink/70">{state.flash}</span>
+            <span className="ml-auto font-mono text-[13px] text-ink/70">{state.flash}</span>
           )}
         </div>
       )}
       {state.flash && state.selected.size === 0 && (
-        <div className="border-2 border-moss bg-moss/10 p-2 font-mono text-[11px] text-moss">
+        <div className="border-2 border-moss bg-moss/10 p-2 font-mono text-[13px] text-moss">
           {state.flash}
         </div>
       )}
 
       {state.error && (
-        <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-xs text-rust">
+        <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-[13px] text-rust">
           {state.error}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-[11px] text-ink/60">
+      <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-[13px] text-ink/60">
         {groupBy === "district" ? (
           <>
             <div className="flex items-center gap-2">
@@ -1264,7 +1264,7 @@ export default function FastRegistrationsTable({
                 <select
                   value={districtsPerPage}
                   onChange={(e) => setDistrictsPerPage(Number(e.target.value))}
-                  className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+                  className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
                 >
                   {DISTRICT_PAGE_SIZE_OPTIONS.map((n) => (
                     <option key={n} value={n}>{n}</option>
@@ -1276,7 +1276,7 @@ export default function FastRegistrationsTable({
                 <select
                   value={rowsPerDistrict}
                   onChange={(e) => setRowsPerDistrict(Number(e.target.value))}
-                  className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+                  className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
                 >
                   {ROWS_PER_DISTRICT_OPTIONS.map((n) => (
                     <option key={n} value={n}>{n === 0 ? "All" : n}</option>
@@ -1315,7 +1315,7 @@ export default function FastRegistrationsTable({
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+                  className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
                 >
                   {PAGE_SIZE_OPTIONS.map((n) => (
                     <option key={n} value={n}>{n}</option>
@@ -1359,7 +1359,7 @@ export default function FastRegistrationsTable({
             <col className="w-44" />
             <col className="w-44" />
           </colgroup>
-          <thead className="sticky top-[60px] z-20 border-b-2 border-ink bg-kraft/95 text-left font-mono text-[10px] uppercase tracking-[0.2em] backdrop-blur-sm">
+          <thead className="sticky top-[60px] z-20 border-b-2 border-ink bg-kraft/95 text-left font-mono text-[12px] uppercase tracking-[0.2em] backdrop-blur-sm">
             <tr>
               <th className="w-8 px-3 py-3">
                 <input
@@ -1469,7 +1469,7 @@ export default function FastRegistrationsTable({
                               {g.label}
                             </span>
                           </button>
-                          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+                          <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
                             {g.rows.length} athlete{g.rows.length === 1 ? "" : "s"}
                             {teamCount > 0 && (
                               <>
@@ -1478,11 +1478,11 @@ export default function FastRegistrationsTable({
                               </>
                             )}
                           </span>
-                          <span className="font-mono text-[11px] text-moss">
+                          <span className="font-mono text-[13px] text-moss">
                             ₹{g.collectedInr.toLocaleString("en-IN")} collected
                           </span>
                           {g.pendingInr > 0 && (
-                            <span className="font-mono text-[11px] text-rust">
+                            <span className="font-mono text-[13px] text-rust">
                               ₹{g.pendingInr.toLocaleString("en-IN")} pending
                             </span>
                           )}
@@ -1498,7 +1498,7 @@ export default function FastRegistrationsTable({
                                   defaultPayer: g.label,
                                 })
                               }
-                              className="ml-auto border-2 border-ink bg-ink px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
+                              className="ml-auto border-2 border-ink bg-ink px-3 py-1 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
                             >
                               Collect ₹{g.pendingInr.toLocaleString("en-IN")}
                             </button>
@@ -1519,7 +1519,7 @@ export default function FastRegistrationsTable({
                             className="border-b-2 border-ink/30 bg-kraft/40"
                           >
                             <td colSpan={10} className="px-3 py-2">
-                              <div className="flex flex-wrap items-center justify-end gap-2 font-mono text-[11px] text-ink/60">
+                              <div className="flex flex-wrap items-center justify-end gap-2 font-mono text-[13px] text-ink/60">
                                 <span>
                                   Rows {sliceStart + 1}–
                                   {Math.min(sliceEnd, g.rows.length)} of{" "}
@@ -1558,7 +1558,7 @@ export default function FastRegistrationsTable({
               <tr>
                 <td
                   colSpan={10}
-                  className="px-3 py-8 text-center font-mono text-xs text-ink/50"
+                  className="px-3 py-8 text-center font-mono text-[13px] text-ink/50"
                 >
                   No registrations match these filters.
                 </td>
@@ -1568,7 +1568,7 @@ export default function FastRegistrationsTable({
         </table>
       </div>
 
-      <div className="flex flex-col gap-2 font-mono text-[11px] text-ink/60">
+      <div className="flex flex-col gap-2 font-mono text-[13px] text-ink/60">
         {groupBy === "district" ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>
@@ -1614,7 +1614,7 @@ export default function FastRegistrationsTable({
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+                  className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
                 >
                   {PAGE_SIZE_OPTIONS.map((n) => (
                     <option key={n} value={n}>{n}</option>
@@ -1735,7 +1735,7 @@ function LifecyclePill({ kind }: { kind: "dq" | "withdrawn" }) {
       : "border-ink/30 text-ink/40";
   return (
     <span
-      className={`inline-block whitespace-nowrap border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] ${cls}`}
+      className={`inline-block whitespace-nowrap border px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] ${cls}`}
     >
       {kind === "dq" ? "DQ" : "withdrawn"}
     </span>
@@ -1749,23 +1749,23 @@ function CheckinPill({
 }) {
   if (status === "weighed_in") {
     return (
-      <span className="inline-block whitespace-nowrap border border-moss bg-moss px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white">
+      <span className="inline-block whitespace-nowrap border border-moss bg-moss px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-white">
         weighed-in
       </span>
     );
   }
   if (status === "no_show") {
     return (
-      <span className="inline-block whitespace-nowrap border border-rust bg-rust px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white">
+      <span className="inline-block whitespace-nowrap border border-rust bg-rust px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] text-white">
         no-show
       </span>
     );
   }
-  return <span className="font-mono text-[10px] text-ink/40">—</span>;
+  return <span className="font-mono text-[12px] text-ink/40">—</span>;
 }
 
 function PaymentPill({ payment }: { payment: Payment | null }) {
-  if (!payment) return <span className="font-mono text-[10px] text-ink/40">—</span>;
+  if (!payment) return <span className="font-mono text-[12px] text-ink/40">—</span>;
   const collected = collectedInr(payment);
   const total = payment.amount_inr ?? 0;
   const remaining = Math.max(0, total - collected);
@@ -1819,24 +1819,24 @@ function PaymentPill({ payment }: { payment: Payment | null }) {
     <div className="flex flex-col gap-0.5 leading-tight">
       <span className="flex flex-wrap items-center gap-1.5">
         <span
-          className={`inline-block whitespace-nowrap border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] ${color}`}
+          className={`inline-block whitespace-nowrap border px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] ${color}`}
         >
           {label}
         </span>
         {total > 0 && (
-          <span className="font-mono text-[10px] tabular-nums text-ink/60">
+          <span className="font-mono text-[12px] tabular-nums text-ink/60">
             ₹{collected.toLocaleString("en-IN")}
             <span className="text-ink/40">{" / ₹"}{total.toLocaleString("en-IN")}</span>
           </span>
         )}
         {methodLabel && (
-          <span className="inline-block border border-ink/30 px-1 font-mono text-[9px] uppercase tracking-[0.15em] text-ink/60">
+          <span className="inline-block border border-ink/30 px-1 font-mono text-[11px] uppercase tracking-[0.15em] text-ink/60">
             {methodLabel}
           </span>
         )}
         {payerLabel && (
           <span
-            className="inline-block border border-ink/40 bg-kraft/30 px-1 font-mono text-[9px] uppercase tracking-[0.15em] text-ink/70"
+            className="inline-block border border-ink/40 bg-kraft/30 px-1 font-mono text-[11px] uppercase tracking-[0.15em] text-ink/70"
             title={`Paid by ${payerLabel}`}
           >
             By {payerLabel}
@@ -1844,7 +1844,7 @@ function PaymentPill({ payment }: { payment: Payment | null }) {
         )}
       </span>
       {payment.utr && (
-        <span className="truncate font-mono text-[10px] text-ink/50" title={payment.utr}>
+        <span className="truncate font-mono text-[12px] text-ink/50" title={payment.utr}>
           {payment.utr}
         </span>
       )}
@@ -1915,13 +1915,13 @@ function CollectPopover({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
       >
-        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/50">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
           {target.kind === "single" ? "Mark as collected" : "Bulk collect"}
         </p>
         <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
           {target.label}
         </h3>
-        <p className="mt-1 font-mono text-xs text-ink/60">
+        <p className="mt-1 font-mono text-[13px] text-ink/60">
           Remaining balance{" "}
           <span className="font-bold text-ink">
             ₹{total.toLocaleString("en-IN")}
@@ -1933,7 +1933,7 @@ function CollectPopover({
 
         <div className="mt-5 space-y-4">
           <fieldset>
-            <legend className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            <legend className="font-mono text-[12px] uppercase tracking-[0.2em]">
               Method
             </legend>
             <div className="mt-2 grid grid-cols-3 gap-1 border-2 border-ink">
@@ -1948,7 +1948,7 @@ function CollectPopover({
                   key={v}
                   type="button"
                   onClick={() => setMethod(v)}
-                  className={`px-3 py-2 font-mono text-xs uppercase tracking-[0.2em] ${
+                  className={`px-3 py-2 font-mono text-[13px] uppercase tracking-[0.2em] ${
                     method === v ? "bg-ink text-bone" : "bg-bone text-ink hover:bg-kraft/30"
                   }`}
                 >
@@ -1960,7 +1960,7 @@ function CollectPopover({
 
           {target.kind === "single" && method !== "waiver" && (
             <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+              <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
                 Amount (₹)
               </span>
               <input
@@ -1971,7 +1971,7 @@ function CollectPopover({
                 onChange={(e) => setAmount(e.target.value)}
                 className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
               />
-              <span className="mt-1 block font-mono text-[10px] text-ink/50">
+              <span className="mt-1 block font-mono text-[12px] text-ink/50">
                 Defaults to the full remainder. Type a smaller number to
                 record an installment — the next collect will offer the
                 rest.
@@ -1987,9 +1987,9 @@ function CollectPopover({
                 onChange={(e) => setWaiveRemainder(e.target.checked)}
                 className="mt-0.5"
               />
-              <span className="font-mono text-[11px] leading-snug text-ink/80">
+              <span className="font-mono text-[13px] leading-snug text-ink/80">
                 Waive the rest (₹{Math.max(0, total - typed).toLocaleString("en-IN")})
-                <span className="block text-[10px] text-ink/50">
+                <span className="block text-[12px] text-ink/50">
                   Closes the balance with a waiver collection so the
                   athlete shows as fully paid.
                 </span>
@@ -2000,7 +2000,7 @@ function CollectPopover({
           {target.kind === "bulk" && method !== "waiver" && (
             <>
               <label className="block">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+                <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
                   Pool amount (₹)
                 </span>
                 <input
@@ -2010,20 +2010,20 @@ function CollectPopover({
                   onChange={(e) => setPoolAmount(e.target.value)}
                   className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
                 />
-                <span className="mt-1 block font-mono text-[10px] text-ink/50">
+                <span className="mt-1 block font-mono text-[12px] text-ink/50">
                   Defaults to the full district balance. Lower it and we
                   auto-allocate oldest-first until it runs out.
                 </span>
               </label>
               {poolShortfall > 0 && (
-                <p className="border-2 border-gold bg-gold/10 px-3 py-2 font-mono text-[11px] leading-snug text-ink">
+                <p className="border-2 border-gold bg-gold/10 px-3 py-2 font-mono text-[13px] leading-snug text-ink">
                   ⚠ Pool ₹{poolNum.toLocaleString("en-IN")} is short by ₹
                   {poolShortfall.toLocaleString("en-IN")}. Athletes are
                   settled oldest-first; the rest stay pending.
                 </p>
               )}
               <label className="block">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+                <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
                   Paid by
                 </span>
                 <input
@@ -2033,7 +2033,7 @@ function CollectPopover({
                   placeholder="District or team name"
                   className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
                 />
-                <span className="mt-1 block font-mono text-[10px] text-ink/50">
+                <span className="mt-1 block font-mono text-[12px] text-ink/50">
                   Stamped on every collection so the row shows a small
                   "By {payerLabel || "…"}" chip.
                 </span>
@@ -2045,7 +2045,7 @@ function CollectPopover({
                   onChange={(e) => setWaiveRemainder(e.target.checked)}
                   className="mt-0.5"
                 />
-                <span className="font-mono text-[11px] leading-snug text-ink/80">
+                <span className="font-mono text-[13px] leading-snug text-ink/80">
                   Treat any shortfall as a waiver per athlete.
                 </span>
               </label>
@@ -2053,7 +2053,7 @@ function CollectPopover({
           )}
 
           <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
               Reference / note
             </span>
             <input
@@ -2068,7 +2068,7 @@ function CollectPopover({
               className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
             />
             {target.kind === "bulk" && (
-              <span className="mt-1 block font-mono text-[10px] text-ink/50">
+              <span className="mt-1 block font-mono text-[12px] text-ink/50">
                 Same reference is recorded on every payment so you can
                 find the bundle later in the audit log.
               </span>
@@ -2080,7 +2080,7 @@ function CollectPopover({
           <button
             type="button"
             onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-xs uppercase tracking-[0.2em] hover:border-ink"
+            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
           >
             Cancel
           </button>
@@ -2105,7 +2105,7 @@ function CollectPopover({
                     : null,
               })
             }
-            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
+            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
           >
             {method === "waiver"
               ? `Waive ₹${total.toLocaleString("en-IN")}`
@@ -2144,7 +2144,7 @@ function ClassesCell({ row }: { row: Row }) {
 
   if (items.length === 0) {
     return (
-      <span className="font-mono text-[10px] text-ink/40">
+      <span className="font-mono text-[12px] text-ink/40">
         {row.weight_class_code ?? "—"}
       </span>
     );
@@ -2154,11 +2154,11 @@ function ClassesCell({ row }: { row: Row }) {
     <ul className="flex flex-col gap-0.5">
       {items.map((it, i) => (
         <li key={`${it.label}-${i}`} className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="border border-ink/30 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.15em]">
+          <span className="border border-ink/30 px-1.5 py-0.5 text-[12px] uppercase tracking-[0.15em]">
             {it.label}
           </span>
           {it.hand && (
-            <span className="text-[10px] text-ink/60">{it.hand}</span>
+            <span className="text-[12px] text-ink/60">{it.hand}</span>
           )}
         </li>
       ))}
@@ -2193,7 +2193,7 @@ function RowActionsMenu({
           e.stopPropagation();
           setOpen((o) => !o);
         }}
-        className="border border-ink/30 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+        className="border border-ink/30 px-2 py-0.5 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
       >
         ?
       </button>
@@ -2213,7 +2213,7 @@ function RowActionsMenu({
                 setOpen(false);
                 onAdjust();
               }}
-              className="block w-full px-3 py-2 text-left font-mono text-[11px] uppercase tracking-[0.2em] hover:bg-kraft/30"
+              className="block w-full px-3 py-2 text-left font-mono text-[13px] uppercase tracking-[0.2em] hover:bg-kraft/30"
             >
               Adjust total fee
             </button>
@@ -2224,7 +2224,7 @@ function RowActionsMenu({
                 setOpen(false);
                 if (canUndo) onUndo();
               }}
-              className="block w-full px-3 py-2 text-left font-mono text-[11px] uppercase tracking-[0.2em] hover:bg-kraft/30 disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-bone"
+              className="block w-full px-3 py-2 text-left font-mono text-[13px] uppercase tracking-[0.2em] hover:bg-kraft/30 disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-bone"
               title={canUndo ? "Reverse the most recent collection" : "No active collections to reverse"}
             >
               Undo last collect
@@ -2264,19 +2264,19 @@ function AdjustTotalPopover({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
       >
-        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/50">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
           Adjust total fee
         </p>
         <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
           {target.label}
         </h3>
-        <p className="mt-1 font-mono text-xs text-ink/60">
+        <p className="mt-1 font-mono text-[13px] text-ink/60">
           ?{target.collected.toLocaleString("en-IN")} already collected.
         </p>
 
         <div className="mt-5 space-y-4">
           <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
               New total (?)
             </span>
             <input
@@ -2286,7 +2286,7 @@ function AdjustTotalPopover({
               onChange={(e) => setAmount(e.target.value)}
               className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
             />
-            <span className="mt-1 block font-mono text-[10px] text-ink/50">
+            <span className="mt-1 block font-mono text-[12px] text-ink/50">
               {newTotal === target.collected
                 ? "Will mark as fully paid."
                 : newTotal > target.collected
@@ -2295,7 +2295,7 @@ function AdjustTotalPopover({
             </span>
           </label>
           <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
               Reason
             </span>
             <input
@@ -2312,7 +2312,7 @@ function AdjustTotalPopover({
           <button
             type="button"
             onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-xs uppercase tracking-[0.2em] hover:border-ink"
+            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
           >
             Cancel
           </button>
@@ -2321,7 +2321,7 @@ function AdjustTotalPopover({
             onClick={() =>
               onConfirm({ amountInr: newTotal, reason: reason.trim() || null })
             }
-            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
+            className="border-2 border-ink bg-ink px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust"
           >
             Save total
           </button>
@@ -2358,18 +2358,18 @@ function UndoCollectPopover({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md border-2 border-ink bg-bone p-6 shadow-[8px_8px_0_0_rgba(10,27,20,0.9)]"
       >
-        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-rust">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-rust">
           Undo collection
         </p>
         <h3 className="mt-1 font-display text-2xl font-black tracking-tight">
           {target.label}
         </h3>
-        <p className="mt-1 font-mono text-xs text-ink/60">
+        <p className="mt-1 font-mono text-[13px] text-ink/60">
           Soft-reverses the {all ? "all collections" : "most recent collection"}. The row stays in the audit log.
         </p>
 
         <div className="mt-5 space-y-4">
-          <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-ink/80">
+          <label className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.2em] text-ink/80">
             <input
               type="checkbox"
               checked={all}
@@ -2378,7 +2378,7 @@ function UndoCollectPopover({
             Reverse every active collection
           </label>
           <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
               Reason (required)
             </span>
             <input
@@ -2395,7 +2395,7 @@ function UndoCollectPopover({
           <button
             type="button"
             onClick={onClose}
-            className="border-2 border-ink/30 px-4 py-2 font-mono text-xs uppercase tracking-[0.2em] hover:border-ink"
+            className="border-2 border-ink/30 px-4 py-2 font-mono text-[13px] uppercase tracking-[0.2em] hover:border-ink"
           >
             Cancel
           </button>
@@ -2403,7 +2403,7 @@ function UndoCollectPopover({
             type="button"
             disabled={!ok}
             onClick={() => onConfirm({ reason: reason.trim(), all })}
-            className="border-2 border-rust bg-rust px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
+            className="border-2 border-rust bg-rust px-5 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-white hover:bg-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             Reverse
           </button>

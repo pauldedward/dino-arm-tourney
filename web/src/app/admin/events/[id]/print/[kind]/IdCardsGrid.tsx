@@ -56,7 +56,7 @@ export default function IdCardsGrid({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-2 border-2 border-ink bg-kraft/20 px-3 py-2 font-mono text-[11px] print:hidden">
+      <div className="mb-3 flex flex-wrap items-center gap-2 border-2 border-ink bg-kraft/20 px-3 py-2 font-mono text-[13px] print:hidden">
         <span className="uppercase tracking-[0.2em] text-ink/70">
           {selected.size} selected
         </span>
@@ -117,20 +117,20 @@ export default function IdCardsGrid({
                   <div className="h-12 w-12 border border-dashed border-ink/40" />
                 )}
               </div>
-              <p className="mt-2 truncate font-mono text-xs font-bold">
+              <p className="mt-2 truncate font-mono text-[13px] font-bold">
                 {r.full_name}
               </p>
-              <p className="font-mono text-[10px] text-ink/60">
+              <p className="font-mono text-[12px] text-ink/60">
                 {r.division ?? "—"} · {r.declared_weight_kg ?? "—"}kg
               </p>
-              <p className="font-mono text-[10px] text-ink/60">
+              <p className="font-mono text-[12px] text-ink/60">
                 {r.district ?? "—"}
               </p>
             </label>
           );
         })}
         {rows.length === 0 && (
-          <p className="col-span-full border-2 border-dashed border-ink/30 p-6 text-center font-mono text-xs text-ink/50">
+          <p className="col-span-full border-2 border-dashed border-ink/30 p-6 text-center font-mono text-[13px] text-ink/50">
             No matching athletes.
           </p>
         )}

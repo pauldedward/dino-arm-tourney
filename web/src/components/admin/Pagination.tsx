@@ -97,7 +97,7 @@ export default function Pagination({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-bone px-3 py-2 font-mono text-[11px] ${className}`}
+      className={`flex flex-wrap items-center justify-between gap-3 border-2 border-ink bg-bone px-3 py-2 font-mono text-[13px] ${className}`}
     >
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-ink/70">
@@ -138,7 +138,7 @@ export default function Pagination({
                   if (url) window.location.href = url;
                 }
               }}
-              className="w-14 border border-ink bg-bone px-1 py-0.5 text-center font-mono text-[11px]"
+              className="w-14 border border-ink bg-bone px-1 py-0.5 text-center font-mono text-[13px]"
               aria-label="Jump to page"
             />
           </label>
@@ -153,7 +153,7 @@ export default function Pagination({
               value={pageSize}
               onChange={(e) => onPageSize(Number(e.target.value))}
               disabled={loading}
-              className="border border-ink bg-bone px-2 py-1 font-mono text-[11px] disabled:opacity-50"
+              className="border border-ink bg-bone px-2 py-1 font-mono text-[13px] disabled:opacity-50"
             >
               {options.map((n) => (
                 <option key={n} value={n}>
@@ -172,7 +172,7 @@ export default function Pagination({
                 const url = hrefForPageSize(Number(e.target.value));
                 if (url) window.location.href = url;
               }}
-              className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+              className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
             >
               {options.map((n) => (
                 <option key={n} value={n}>

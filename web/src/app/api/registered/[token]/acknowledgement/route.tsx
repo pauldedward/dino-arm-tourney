@@ -34,7 +34,7 @@ export async function GET(
   const { data: event } = await svc
     .from("events")
     .select(
-      "id, name, starts_at, primary_color, accent_color, text_on_primary, id_card_org_name, id_card_event_title, id_card_footer"
+      "id, name, starts_at, primary_color, accent_color, text_on_primary, id_card_org_name, id_card_event_title, id_card_footer, payment_mode"
     )
     .eq("id", reg.event_id)
     .maybeSingle();
@@ -69,6 +69,9 @@ export async function GET(
         id_card_org_name: event.id_card_org_name,
         id_card_event_title: event.id_card_event_title,
         id_card_footer: event.id_card_footer,
+        payment_mode:
+          (event.payment_mode as "online_upi" | "offline" | "hybrid" | null) ??
+          "online_upi",
       }}
       reg={{
         chest_no: reg.chest_no,
@@ -109,6 +112,7 @@ type AckEvent = {
   id_card_org_name: string | null;
   id_card_event_title: string | null;
   id_card_footer: string | null;
+  payment_mode: "online_upi" | "offline" | "hybrid";
 };
 
 type AckReg = {
@@ -143,6 +147,20 @@ function AcknowledgementDoc({
   const accent = event.accent_color ?? colors.gold;
   const onPrimary = event.text_on_primary ?? "#ffffff";
   const isVerified = payment.status === "verified";
+  // Unverified copy depends on how the event collects money: pure-offline
+  // events never ask for a UTR, so "AWAITING PAYMENT" should read as
+  // "PAY AT COUNTER" instead. Hybrid keeps the UTR-friendly wording but
+  // mentions the counter as a fallback in the meta line below.
+  const isOffline = event.payment_mode === "offline";
+  const isHybrid = event.payment_mode === "hybrid";
+  const unverifiedLabel =
+    payment.status === "rejected"
+      ? "REJECTED"
+      : payment.utr
+        ? "UNDER REVIEW"
+        : isOffline
+          ? "PAY AT COUNTER"
+          : "AWAITING PAYMENT";
 
   return (
     <Document>
@@ -227,14 +245,16 @@ function AcknowledgementDoc({
               marginTop: 4,
             }}
           >
-            {isVerified
-              ? "VERIFIED"
-              : payment.status === "rejected"
-                ? "REJECTED"
-                : payment.utr
-                  ? "UNDER REVIEW"
-                  : "AWAITING PAYMENT"}
+            {isVerified ? "VERIFIED" : unverifiedLabel}
           </Text>
+
+          {!isVerified && (isOffline || isHybrid) && (
+            <Text style={{ fontSize: 9, color: "#555", marginTop: 6 }}>
+              {isOffline
+                ? "This event collects fees in person. Quote your chest number at the registration counter."
+                : "Pay via UPI before event day, or settle at the registration counter."}
+            </Text>
+          )}
 
           {isVerified && (
             <View style={{ marginTop: 10 }}>

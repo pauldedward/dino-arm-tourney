@@ -71,7 +71,7 @@ export default function CategorySectionActions({
         type="button"
         onClick={onCsv}
         title="Download this category as CSV"
-        className="border border-paper/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-paper/90 hover:bg-paper hover:text-ink"
+        className="border border-paper/40 px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] text-paper/90 hover:bg-paper hover:text-ink"
       >
         CSV ↓
       </button>
@@ -79,7 +79,7 @@ export default function CategorySectionActions({
         type="button"
         onClick={onPrint}
         title="Print only this category"
-        className="border border-paper/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-paper/90 hover:bg-paper hover:text-ink"
+        className="border border-paper/40 px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] text-paper/90 hover:bg-paper hover:text-ink"
       >
         Print ⎙
       </button>

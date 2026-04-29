@@ -11,6 +11,8 @@ import {
   WAF_PARA,
   wafBucketForWeight,
   type Gender,
+  type WafBucket,
+  type WafCategory,
 } from "./waf-2025";
 
 export type Hand = "R" | "L" | "B";
@@ -24,6 +26,12 @@ export type RegistrationLite = {
   nonpara_hands: (Hand | null)[] | null;
   para_codes: string[] | null;
   para_hand: Hand | null;
+  /**
+   * Operator opt-in: place this non-para entry in the bucket immediately
+   * above the one the weight resolves to. Ignored for para entries and
+   * for athletes already in the open bucket.
+   */
+  weight_bump_up?: boolean | null;
 };
 
 export type WeighInLite = { measured_kg: number };
@@ -46,14 +54,16 @@ export function resolveEntries(
   if (!Number.isFinite(weightKg) || weightKg <= 0) return [];
 
   const out: ResolvedEntry[] = [];
+  const bumpUp = reg.weight_bump_up === true;
 
   for (const className of reg.nonpara_classes ?? []) {
     const cat = WAF_ABLE.find(
       (c) => c.className === className && c.gender === reg.gender
     );
     if (!cat) continue;
-    const bucket = wafBucketForWeight(cat, weightKg);
-    if (!bucket) continue;
+    const baseBucket = wafBucketForWeight(cat, weightKg);
+    if (!baseBucket) continue;
+    const bucket = bumpUp ? bumpedBucket(cat, baseBucket) : baseBucket;
     const idx = (reg.nonpara_classes ?? []).indexOf(className);
     const handForClass = reg.nonpara_hands?.[idx] ?? null;
     const hands = expandHand(handForClass);
@@ -93,4 +103,16 @@ function expandHand(h: Hand | null): ("R" | "L")[] {
   if (h === "L") return ["L"];
   if (h === "B") return ["R", "L"];
   return [];
+}
+
+/**
+ * Return the bucket immediately above `current` within `category`, or
+ * `current` itself if it is already the open (top) bucket. WAF buckets
+ * are stored ascending with the open bucket last, so a simple index +1
+ * lookup is enough.
+ */
+function bumpedBucket(category: WafCategory, current: WafBucket): WafBucket {
+  const i = category.buckets.findIndex((b) => b.code === current.code);
+  if (i < 0) return current;
+  return category.buckets[i + 1] ?? current;
 }

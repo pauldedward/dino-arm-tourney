@@ -71,13 +71,13 @@ export default async function EventDetail({
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] opacity-70">
+            <p className="font-mono text-[12px] uppercase tracking-[0.3em] opacity-70">
               Event · {event.status}
             </p>
             <h1 className="mt-1 font-display text-4xl font-black tracking-tight">
               {event.name}
             </h1>
-            <p className="mt-2 font-mono text-xs opacity-80">
+            <p className="mt-2 font-mono text-[13px] opacity-80">
               {new Date(event.starts_at).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}
               {event.venue_city && ` · ${event.venue_city}`}
             </p>
@@ -86,7 +86,7 @@ export default async function EventDetail({
             href={`/e/${event.slug}`}
             target="_blank"
             rel="noopener"
-            className="border-2 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em]"
+            className="border-2 px-4 py-2 font-mono text-[12px] uppercase tracking-[0.2em]"
             style={{ borderColor: event.accent_color ?? "#f5c518", color: event.accent_color ?? "#f5c518" }}
           >
             View public ↗
@@ -96,7 +96,7 @@ export default async function EventDetail({
 
       <div className="flex flex-wrap items-center gap-3">
         <ModePill mode={paymentMode} />
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/50">
+        <span className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
           Entry fee · ₹{event.entry_fee_default_inr ?? 0} / hand
         </span>
       </div>
@@ -175,7 +175,7 @@ function Stat({
   const display = n.toLocaleString("en-IN");
   const body = (
     <span className="block w-full">
-      <span className="block font-mono text-[10px] uppercase tracking-[0.3em] text-ink/60">
+      <span className="block font-mono text-[12px] uppercase tracking-[0.3em] text-ink/60">
         {label}
       </span>
       <span
@@ -185,7 +185,7 @@ function Stat({
         {display}
       </span>
       {subtitle && (
-        <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.2em] text-ink/40">
+        <span className="mt-1 block font-mono text-[12px] uppercase tracking-[0.2em] text-ink/40">
           {subtitle}
         </span>
       )}
@@ -215,7 +215,7 @@ function ModePill({ mode }: { mode: "online_upi" | "offline" | "hybrid" }) {
   const m = labels[mode];
   return (
     <span
-      className={`inline-flex items-center gap-2 border-2 bg-bone px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.25em] ${m.color}`}
+      className={`inline-flex items-center gap-2 border-2 bg-bone px-3 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.25em] ${m.color}`}
     >
       <span className="text-ink/40">Mode</span>
       <span>{m.text}</span>
@@ -239,13 +239,13 @@ function CollectedRatioStat({
   if (total === 0) {
     return (
       <div className="border-2 border-ink bg-bone p-5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/60">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/60">
           % Collected
         </p>
         <p className="tnum mt-2 font-display text-5xl font-black tracking-tight text-ink/30">
           —
         </p>
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/40">
+        <p className="mt-1 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/40">
           no fees due
         </p>
       </div>
@@ -257,7 +257,7 @@ function CollectedRatioStat({
     <div
       className={`border-2 p-5 ${allPaid ? "border-moss bg-moss/5" : "border-ink bg-bone"}`}
     >
-      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/60">
+      <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/60">
         % Collected
       </p>
       <p
@@ -266,7 +266,7 @@ function CollectedRatioStat({
         {pct}
         <span className="ml-1 text-2xl text-ink/50">%</span>
       </p>
-      <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/40">
+      <p className="mt-1 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/40">
         of ₹{total.toLocaleString("en-IN")} expected
       </p>
     </div>
@@ -278,7 +278,7 @@ function QuickLink({ href, title, desc, external }: { href: string; title: strin
   const inner = (
     <>
       <p className="font-display text-xl font-black tracking-tight">{title}</p>
-      <p className="mt-1 font-mono text-xs text-ink/60">{desc}</p>
+      <p className="mt-1 font-mono text-[13px] text-ink/60">{desc}</p>
     </>
   );
   if (external) {

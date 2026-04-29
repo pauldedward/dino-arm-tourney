@@ -22,7 +22,7 @@ import {
 export const dynamic = "force-dynamic";
 
 // Sheets that ship in BOTH PDF and XLSX get an xlsx download button on the
-// same preview page â€” never split across two routes. Keep this set in sync
+// same preview page — never split across two routes. Keep this set in sync
 // with /api/admin/sheets/[kind]/route.ts.
 const XLSX_KINDS: ReadonlySet<string> = new Set([
   "nominal",
@@ -40,7 +40,7 @@ const SHEETS = {
   },
   "payment-report": {
     title: "Payment Report",
-    blurb: "Athlete payment status with paid/due totals â€” PDF + XLSX from the same source.",
+    blurb: "Athlete payment status with paid/due totals — PDF + XLSX from the same source.",
   },
   fixtures: { title: "Fixtures", blurb: "Bracket trees per category." },
   "cash-sheet": {
@@ -57,7 +57,7 @@ function isKind(s: string): s is Kind {
 
 /**
  * Per-kind on-screen pagination defaults. Print/PDF/XLSX endpoints stay
- * unpaginated â€” these only chunk the on-screen preview so events with
+ * unpaginated — these only chunk the on-screen preview so events with
  * hundreds of athletes don't blow up the DOM.
  */
 const PAGE_SIZE_OPTIONS_ROWS = [50, 100, 200, 500] as const;
@@ -142,24 +142,24 @@ export default async function PrintPreviewPage({
   return (
     <div className="space-y-4">
       <div className="print:hidden">
-        <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
-          {event.name} Â· Preview before print
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
+          {event.name} · Preview before print
         </p>
         <h1 className="mt-1 font-display text-4xl font-black tracking-tight">
           {sheet.title}
         </h1>
-        <p className="mt-1 font-mono text-xs text-ink/60">{sheet.blurb}</p>
+        <p className="mt-1 font-mono text-[13px] text-ink/60">{sheet.blurb}</p>
         <div className="mt-2 flex flex-wrap items-center gap-4">
           <Link
             href={`/admin/events/${eventSlug}/print`}
-            className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+            className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
           >
             â† all sheets
           </Link>
           {kind === "id-cards" && (
             <Link
               href={`/admin/events/${eventSlug}/branding`}
-              className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+              className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
             >
               edit ID card branding â†’
             </Link>
@@ -263,7 +263,7 @@ async function NominalPreview({
         linkBase={linkBase}
       />
       <div className="border-2 border-ink">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse font-mono text-[13px]">
           <thead className="bg-ink text-paper">
             <tr>
               <Th>Chest</Th>
@@ -278,12 +278,12 @@ async function NominalPreview({
           <tbody>
             {slice.map((r, i) => (
               <tr key={i} className="border-t border-ink/20 even:bg-kraft/10">
-                <Td>{r.chest_no ?? "â€”"}</Td>
+                <Td>{r.chest_no ?? "—"}</Td>
                 <Td className="font-semibold">{r.full_name}</Td>
-                <Td>{r.division ?? "â€”"}</Td>
-                <Td>{r.district ?? "â€”"}</Td>
-                <Td>{r.team ?? "â€”"}</Td>
-                <Td className="text-right">{r.declared_weight_kg ?? "â€”"}</Td>
+                <Td>{r.division ?? "—"}</Td>
+                <Td>{r.district ?? "—"}</Td>
+                <Td>{r.team ?? "—"}</Td>
+                <Td className="text-right">{r.declared_weight_kg ?? "—"}</Td>
                 <Td>{r.status}</Td>
               </tr>
             ))}
@@ -330,7 +330,7 @@ async function CategoryPreview({
   const svc = createServiceClient();
   // Fetch event metadata, registrations, AND weigh-ins in parallel.
   // Weigh-ins are joined through registrations(event_id) so we don't
-  // round-trip a huge IN(registration_id, ...) list â€” that approach hit
+  // round-trip a huge IN(registration_id, ...) list — that approach hit
   // PostgREST URL limits and stalled this route for tens of seconds on
   // events with hundreds of athletes.
   const [eventRes, regsRes, sumsRes, wisRes] = await Promise.all([
@@ -338,7 +338,7 @@ async function CategoryPreview({
     svc
       .from("registrations")
       .select(
-        "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, status, checkin_status"
+        "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_bump_up, status, checkin_status"
       )
       .eq("event_id", eventId),
     svc
@@ -397,6 +397,7 @@ async function CategoryPreview({
         ),
       para_codes: (r.para_codes as string[] | null) ?? [],
       para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
+      weight_bump_up: r.weight_bump_up === true,
     };
     return {
       ...lite,
@@ -427,7 +428,7 @@ async function CategoryPreview({
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         categories={allCats}
-        totalLabel={`${total} athletes Â· ${totalGroups} categories`}
+        totalLabel={`${total} athletes · ${totalGroups} categories`}
       />
       <PreviewPager
         page={page}
@@ -449,12 +450,12 @@ async function CategoryPreview({
                 <p className="font-display text-lg font-black tracking-tight">
                   {formatCategoryCode(c.code)}
                 </p>
-                <span className="border border-paper/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-paper/80">
+                <span className="border border-paper/40 px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] text-paper/80">
                   {c.code}
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em]">
+                <p className="font-mono text-[12px] uppercase tracking-[0.2em]">
                   {c.athletes.length} athletes
                 </p>
                 <CategorySectionActions
@@ -469,7 +470,7 @@ async function CategoryPreview({
                 />
               </div>
             </div>
-            <table className="w-full border-collapse font-mono text-xs">
+            <table className="w-full border-collapse font-mono text-[13px]">
               <thead className="bg-kraft/30">
                 <tr>
                   <Th>Chest</Th>
@@ -480,9 +481,9 @@ async function CategoryPreview({
               <tbody>
                 {c.athletes.map((a, i) => (
                   <tr key={i} className="border-t border-ink/10 even:bg-kraft/5">
-                    <Td>{a.chest_no ?? "â€”"}</Td>
-                    <Td className="font-semibold">{a.full_name ?? "â€”"}</Td>
-                    <Td>{a.district ?? "â€”"}</Td>
+                    <Td>{a.chest_no ?? "—"}</Td>
+                    <Td className="font-semibold">{a.full_name ?? "—"}</Td>
+                    <Td>{a.district ?? "—"}</Td>
                   </tr>
                 ))}
                 {c.athletes.length === 0 && <EmptyRow cols={3} />}
@@ -491,7 +492,7 @@ async function CategoryPreview({
           </div>
         ))}
         {cats.length === 0 && (
-          <p className="border-2 border-dashed border-ink/30 p-6 text-center font-mono text-xs text-ink/50">
+          <p className="border-2 border-dashed border-ink/30 p-6 text-center font-mono text-[13px] text-ink/50">
             No matching categories.
           </p>
         )}
@@ -554,7 +555,7 @@ async function IdCardsPreview({
   // Photos are stored as private R2 keys; resolve to short-lived signed
   // URLs so the on-screen preview actually shows the pictures the PDF
   // will print. Failures are silent - the placeholder box still renders.
-  // Only sign URLs for the visible page â€” 600 signed-URL hits per page
+  // Only sign URLs for the visible page — 600 signed-URL hits per page
   // load was a real cost on big events.
   const rows = await Promise.all(
     slice.map(async (r) => {
@@ -580,7 +581,7 @@ async function IdCardsPreview({
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
         divisions={divisions}
-        totalLabel={`${total} cards Â· ${Math.ceil(total / 9)} A4 pages`}
+        totalLabel={`${total} cards · ${Math.ceil(total / 9)} A4 pages`}
       />
       <PreviewPager
         page={page}
@@ -709,7 +710,7 @@ async function FixturesPreview({
       <PreviewToolbar
         pdfUrl={pdfUrl}
         categories={allCats}
-        totalLabel={`${cats.reduce((n, c) => n + c.matches.length, 0)} matches Â· ${cats.length} categories`}
+        totalLabel={`${cats.reduce((n, c) => n + c.matches.length, 0)} matches · ${cats.length} categories`}
       />
       <PreviewPager
         page={page}
@@ -719,7 +720,7 @@ async function FixturesPreview({
         itemLabel="categories"
         linkBase={linkBase}
       />
-      <p className="mb-3 border-l-4 border-ink bg-kraft/30 px-3 py-2 font-mono text-[11px] text-ink/70 print:bg-transparent">
+      <p className="mb-3 border-l-4 border-ink bg-kraft/30 px-3 py-2 font-mono text-[13px] text-ink/70 print:bg-transparent">
         Offline run-of-show: tick the winner&apos;s box, write the advancing
         name on the dashed line of the next round&apos;s match card, sign on the
         Ref line. BYE = athlete advances automatically; TBD lines fill as the
@@ -749,7 +750,7 @@ async function FixturesPreview({
                   <p className="font-display text-lg font-black tracking-tight">
                     {formatCategoryCode(c.code)}
                   </p>
-                  <span className="border border-paper/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-paper/80">
+                  <span className="border border-paper/40 px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] text-paper/80">
                     {c.code}
                   </span>
                 </div>
@@ -773,20 +774,20 @@ async function FixturesPreview({
                   );
                   return (
                     <section key={side}>
-                      <p className="mb-2 border-b border-ink/40 pb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/70">
+                      <p className="mb-2 border-b border-ink/40 pb-1 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/70">
                         {SIDE_LABEL[side]}
                       </p>
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {rounds.map(([round_no, matches]) => (
                           <div key={round_no} className="border border-ink/40">
-                            <p className="border-b border-ink/40 bg-kraft/30 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em]">
+                            <p className="border-b border-ink/40 bg-kraft/30 px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em]">
                               {side === "GF" ? "Grand Final" : `Round ${round_no}`}
                             </p>
-                            <div className="divide-y divide-ink/10 font-mono text-xs">
+                            <div className="divide-y divide-ink/10 font-mono text-[13px]">
                               {matches.map((m) => {
                                 // Round 1 of W is the only place a missing
                                 // slot is a real bye. Everywhere else it's a
-                                // pending slot â€” render a fillable line so the
+                                // pending slot — render a fillable line so the
                                 // ref can write the advancing name in pen.
                                 const isR1W = m.side === "W" && m.round_no === 1;
                                 const renderSlot = (
@@ -794,7 +795,7 @@ async function FixturesPreview({
                                   value: string | null
                                 ) => (
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-ink/40">
+                                    <span className="text-[12px] text-ink/40">
                                       {letter}
                                     </span>
                                     <span
@@ -814,7 +815,7 @@ async function FixturesPreview({
                                 );
                                 return (
                                   <div key={m.match_no} className="space-y-1 px-2 py-2">
-                                    <div className="flex items-baseline justify-between text-[10px] text-ink/50">
+                                    <div className="flex items-baseline justify-between text-[12px] text-ink/50">
                                       <span className="font-bold text-ink">
                                         M{m.match_no}
                                       </span>
@@ -823,7 +824,7 @@ async function FixturesPreview({
                                     {renderSlot("A", m.a)}
                                     {renderSlot("B", m.b)}
                                     {m.best_of > 1 ? (
-                                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 pt-1 text-[10px] text-ink/60">
+                                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink/10 pt-1 text-[12px] text-ink/60">
                                         <span className="font-bold text-ink">
                                           BEST OF {m.best_of}
                                         </span>
@@ -847,7 +848,7 @@ async function FixturesPreview({
                                         ))}
                                       </div>
                                     ) : null}
-                                    <div className="flex items-center gap-2 border-t border-ink/10 pt-1 text-[10px] text-ink/50">
+                                    <div className="flex items-center gap-2 border-t border-ink/10 pt-1 text-[12px] text-ink/50">
                                       <span>Ref</span>
                                       <span className="flex-1 border-b border-dashed border-ink/40">
                                         &nbsp;
@@ -868,7 +869,7 @@ async function FixturesPreview({
           );
         })}
         {cats.length === 0 && (
-          <p className="border-2 border-dashed border-ink/30 p-6 text-center font-mono text-xs text-ink/50">
+          <p className="border-2 border-dashed border-ink/30 p-6 text-center font-mono text-[13px] text-ink/50">
             No fixtures match your filters.
           </p>
         )}
@@ -928,23 +929,27 @@ async function PaymentReportPreview({
       <PreviewToolbar
         pdfUrl={pdfUrl}
         xlsxUrl={xlsxUrl}
-        totalLabel={`${totals.total_athletes} athletes Â· ${Math.round(totals.percent_paid)}% paid Â· â‚¹${totals.total_due.toLocaleString(
+        totalLabel={`${totals.total_athletes} athletes · ${Math.round(totals.percent_paid)}% collected · ₹${totals.total_due.toLocaleString(
           "en-IN"
-        )} due`}
+        )} due${totals.total_waived ? ` · ₹${totals.total_waived.toLocaleString("en-IN")} waived (${totals.waived_n})` : ""}`}
       />
-      <div className="grid gap-2 md:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-5">
         <SummaryCard label="Athletes" value={String(totals.total_athletes)} />
         <SummaryCard
-          label="Paid"
-          value={`â‚¹${totals.total_paid.toLocaleString("en-IN")}`}
+          label="Received"
+          value={`₹${totals.total_received.toLocaleString("en-IN")}`}
           tone="paid"
         />
         <SummaryCard
+          label={`Waived${totals.waived_n ? ` (${totals.waived_n})` : ""}`}
+          value={`₹${totals.total_waived.toLocaleString("en-IN")}`}
+        />
+        <SummaryCard
           label="Due"
-          value={`â‚¹${totals.total_due.toLocaleString("en-IN")}`}
+          value={`₹${totals.total_due.toLocaleString("en-IN")}`}
           tone="due"
         />
-        <SummaryCard label="% Paid" value={`${Math.round(totals.percent_paid)}%`} />
+        <SummaryCard label="% Collected" value={`${Math.round(totals.percent_paid)}%`} />
       </div>
       {districts.length > 0 && (
         <DistrictSummary eventSlug={eventSlug} totals={districts} />
@@ -958,52 +963,61 @@ async function PaymentReportPreview({
         linkBase={linkBase}
       />
       <div className="border-2 border-ink">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse font-mono text-[13px]">
           <thead className="bg-ink text-paper">
             <tr>
               <Th>Chest</Th>
               <Th>Athlete</Th>
               <Th>Team / District</Th>
               <Th>Category</Th>
-              <Th className="text-right">Total (â‚¹)</Th>
-              <Th className="text-right">Paid (â‚¹)</Th>
-              <Th className="text-right">Due (â‚¹)</Th>
+              <Th className="text-right">Total (₹)</Th>
+              <Th className="text-right">Recv (₹)</Th>
+              <Th className="text-right">Waived (₹)</Th>
+              <Th className="text-right">Due (₹)</Th>
               <Th>Paid by</Th>
             </tr>
           </thead>
           <tbody>
             {slice.map((r, i) => (
               <tr key={i} className="border-t border-ink/20 even:bg-kraft/10">
-                <Td>{r.chest_no ?? "â€”"}</Td>
+                <Td>{r.chest_no ?? "—"}</Td>
                 <Td className="font-semibold">{r.full_name}</Td>
-                <Td>{r.team_or_district ?? "â€”"}</Td>
-                <Td>{r.category ?? "â€”"}</Td>
+                <Td>{r.team_or_district ?? "—"}</Td>
+                <Td>{r.category ?? "—"}</Td>
                 <Td className="text-right">
-                  {r.total_inr ? r.total_inr.toLocaleString("en-IN") : "â€”"}
+                  {r.total_inr ? r.total_inr.toLocaleString("en-IN") : "—"}
                 </Td>
                 <Td className="text-right">
-                  {r.paid_inr ? r.paid_inr.toLocaleString("en-IN") : "â€”"}
+                  {r.received_inr ? r.received_inr.toLocaleString("en-IN") : "—"}
                 </Td>
                 <Td className="text-right">
-                  {r.due_inr ? r.due_inr.toLocaleString("en-IN") : "â€”"}
+                  {r.waived_inr ? r.waived_inr.toLocaleString("en-IN") : "—"}
                 </Td>
-                <Td>{r.paid_by ?? "â€”"}</Td>
+                <Td className="text-right">
+                  {r.due_inr ? r.due_inr.toLocaleString("en-IN") : "—"}
+                </Td>
+                <Td>{r.paid_by ?? "—"}</Td>
               </tr>
             ))}
-            {slice.length === 0 && <EmptyRow cols={8} />}
+            {slice.length === 0 && <EmptyRow cols={9} />}
             {filtered.length > 0 && (
               <tr className="border-t-2 border-ink bg-volt/30 font-bold">
                 <Td colSpan={4} className="text-right uppercase tracking-[0.2em]">
                   Grand Total (all {filtered.length})
                 </Td>
-                <Td className="text-right">â€”</Td>
                 <Td className="text-right">
-                  â‚¹{totals.total_paid.toLocaleString("en-IN")}
+                  ₹{totals.total_billable.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  â‚¹{totals.total_due.toLocaleString("en-IN")}
+                  ₹{totals.total_received.toLocaleString("en-IN")}
                 </Td>
-                <Td>â€”</Td>
+                <Td className="text-right">
+                  ₹{totals.total_waived.toLocaleString("en-IN")}
+                </Td>
+                <Td className="text-right">
+                  ₹{totals.total_due.toLocaleString("en-IN")}
+                </Td>
+                <Td>—</Td>
               </tr>
             )}
           </tbody>
@@ -1042,7 +1056,7 @@ async function CashSheetPreview({
   // Use payment_summary view (single source of truth defined in
   // migration 0028) so partial collections are counted correctly. The
   // legacy query summed amount_inr filtered by status='verified' and
-  // mis-reported partials as â‚¹0 paid / full â‚¹ pending.
+  // mis-reported partials as ₹0 paid / full ₹ pending.
   const { data: sums } = await svc
     .from("payment_summary")
     .select("registration_id, total_inr, collected_inr, derived_status")
@@ -1088,19 +1102,19 @@ async function CashSheetPreview({
     <>
       <PreviewToolbar
         pdfUrl={pdfUrl}
-        totalLabel={`${rows.length} district${rows.length === 1 ? "" : "s"} Â· ${grand.athletes} athletes Â· â‚¹${grand.expected.toLocaleString(
+        totalLabel={`${rows.length} district${rows.length === 1 ? "" : "s"} · ${grand.athletes} athletes · ₹${grand.expected.toLocaleString(
           "en-IN"
         )} expected`}
       />
       <div className="border-2 border-ink">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse font-mono text-[13px]">
           <thead className="bg-ink text-paper">
             <tr>
               <Th>District</Th>
               <Th className="text-right">Athletes</Th>
-              <Th className="text-right">Expected (â‚¹)</Th>
-              <Th className="text-right">Collected (â‚¹)</Th>
-              <Th className="text-right">Pending (â‚¹)</Th>
+              <Th className="text-right">Expected (₹)</Th>
+              <Th className="text-right">Collected (₹)</Th>
+              <Th className="text-right">Pending (₹)</Th>
             </tr>
           </thead>
           <tbody>
@@ -1121,20 +1135,20 @@ async function CashSheetPreview({
                 <Td className="uppercase tracking-[0.2em]">Grand Total</Td>
                 <Td className="text-right">{grand.athletes}</Td>
                 <Td className="text-right">
-                  â‚¹{grand.expected.toLocaleString("en-IN")}
+                  ₹{grand.expected.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  â‚¹{grand.paid.toLocaleString("en-IN")}
+                  ₹{grand.paid.toLocaleString("en-IN")}
                 </Td>
                 <Td className="text-right">
-                  â‚¹{(grand.expected - grand.paid).toLocaleString("en-IN")}
+                  ₹{(grand.expected - grand.paid).toLocaleString("en-IN")}
                 </Td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <p className="font-mono text-[10px] text-ink/60">
+      <p className="font-mono text-[12px] text-ink/60">
         The PDF includes a separate page per district with athlete names,
         chest #, fee and a signature column for the District Convener.
       </p>
@@ -1159,7 +1173,7 @@ function SummaryCard({
         : "bg-kraft/20";
   return (
     <div className={`border-2 border-ink p-3 ${toneCls}`}>
-      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-ink/60">
+      <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/60">
         {label}
       </p>
       <p className="mt-1 font-display text-3xl font-black">{value}</p>
@@ -1178,7 +1192,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.15em] ${className}`}
+      className={`px-2 py-1.5 text-left font-mono text-[12px] uppercase tracking-[0.15em] ${className}`}
     >
       {children}
     </th>
@@ -1206,7 +1220,7 @@ function EmptyRow({ cols }: { cols: number }) {
     <tr>
       <td
         colSpan={cols}
-        className="px-2 py-6 text-center font-mono text-xs text-ink/50"
+        className="px-2 py-6 text-center font-mono text-[13px] text-ink/50"
       >
         No rows match your filters.
       </td>
@@ -1219,8 +1233,8 @@ function PreviewSkeleton() {
     <div className="space-y-3">
       <div className="h-10 animate-pulse border-2 border-ink/20 bg-kraft/10" />
       <div className="h-32 animate-pulse border-2 border-ink/20 bg-kraft/10" />
-      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
-        loading sheetâ€¦
+      <p className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
+        loading sheet…
       </p>
     </div>
   );

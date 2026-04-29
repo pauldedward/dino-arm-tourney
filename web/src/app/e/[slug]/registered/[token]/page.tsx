@@ -33,7 +33,7 @@ export default async function RegisteredPage({
   const [regRes, eventRes, userRes] = await Promise.all([
     svc
       .from("registrations")
-      .select("id, public_token, chest_no, full_name, initial, division, status, declared_weight_kg, event_id, athlete_id, gender, nonpara_classes, nonpara_hands, para_codes, para_hand")
+      .select("id, public_token, chest_no, full_name, initial, division, status, declared_weight_kg, event_id, athlete_id, gender, nonpara_classes, nonpara_hands, para_codes, para_hand, weight_bump_up")
       .eq("public_token", token)
       .maybeSingle(),
     svc
@@ -112,6 +112,7 @@ export default async function RegisteredPage({
       (reg.nonpara_hands as RegistrationLite["nonpara_hands"]) ?? null,
     para_codes: (reg.para_codes as string[] | null) ?? [],
     para_hand: (reg.para_hand as RegistrationLite["para_hand"]) ?? null,
+    weight_bump_up: reg.weight_bump_up === true,
   };
   const declaredEntries = resolveEntries(regLite, null, refYear);
   const eligibleEntries = weighIn

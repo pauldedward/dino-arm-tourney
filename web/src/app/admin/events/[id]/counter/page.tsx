@@ -50,12 +50,12 @@ export default async function CounterDeskPage({
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
+          <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
             {event.name} · operator desk
           </p>
           <h1 className="mt-1 font-display text-3xl font-black tracking-tight">
             Counter Desk
-            <span className="ml-3 align-middle font-mono text-[11px] font-normal uppercase tracking-[0.2em] text-ink/50">
+            <span className="ml-3 align-middle font-mono text-[13px] font-normal uppercase tracking-[0.2em] text-ink/50">
               fee {feeLabel} · Ctrl+Enter to save
             </span>
           </h1>
@@ -64,14 +64,14 @@ export default async function CounterDeskPage({
           <PendingLink
             href={`/admin/events/${event.slug}/registrations`}
             prefetch
-            className="border-2 border-ink px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
+            className="border-2 border-ink px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
           >
             All registrations →
           </PendingLink>
           <PendingLink
             href={`/admin/events/${event.slug}`}
             prefetch
-            className="font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+            className="font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
           >
             ← event
           </PendingLink>

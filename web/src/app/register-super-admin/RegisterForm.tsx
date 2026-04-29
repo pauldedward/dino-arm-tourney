@@ -104,7 +104,7 @@ export default function RegisterForm() {
         disabled={busy}
         className="w-full border-2 border-ink bg-ink py-3 font-mono text-xs font-bold uppercase tracking-[0.3em] text-bone disabled:opacity-50"
       >
-        {busy ? "RegisteringÃ¢â‚¬Â¦" : "Register super admin Ã¢â€ â€™"}
+        {busy ? "Registering…" : "Register super admin →"}
       </button>
     </form>
   );

@@ -253,7 +253,7 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
           <ModeCard
             active={mode === "offline"}
             onClick={() => setMode("offline")}
-            title="Offline only"
+            title="Counter only"
             desc="No QR. Cash / UPI at counter or via district secretary; operator ticks them off."
           />
           <ModeCard

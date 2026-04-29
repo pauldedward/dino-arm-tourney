@@ -274,7 +274,7 @@ export default function NewEventForm({ organizations }: { organizations: Org[] }
                 <ModeCard
                   active={paymentMode === "offline"}
                   onClick={() => setPaymentMode("offline")}
-                  title="Offline only"
+                  title="Counter only"
                   desc="No QR. Athletes register, then pay cash / UPI at the counter or via their district secretary. Operator ticks them off."
                 />
                 <ModeCard

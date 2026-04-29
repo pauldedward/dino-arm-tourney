@@ -141,7 +141,7 @@ export default function ProofReviewModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b-2 border-ink bg-kraft/20 px-4 py-3">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
+            <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
               Payment proof
             </p>
             <h2 className="mt-1 font-display text-2xl font-black tracking-tight">
@@ -153,7 +153,7 @@ export default function ProofReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="border-2 border-ink px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-rust hover:text-white"
+              className="border-2 border-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] hover:bg-rust hover:text-white"
               aria-label="Close"
             >
               Esc ✕
@@ -165,7 +165,7 @@ export default function ProofReviewModal({
         <div className="flex min-h-0 flex-1">
           {/* Left rail — list */}
           <aside className="flex w-64 shrink-0 flex-col border-r-2 border-ink">
-            <div className="flex min-h-[28px] items-center border-b border-ink/30 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/60">
+            <div className="flex min-h-[28px] items-center border-b border-ink/30 px-3 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/60">
               {loading ? (
                 <Spinner variant="inline" label="Loading" />
               ) : (
@@ -180,11 +180,11 @@ export default function ProofReviewModal({
                     <button
                       type="button"
                       onClick={() => setActiveIdx(idx)}
-                      className={`block w-full border-b border-ink/10 px-3 py-2 text-left font-mono text-xs ${
+                      className={`block w-full border-b border-ink/10 px-3 py-2 text-left font-mono text-[13px] ${
                         isActive ? "bg-rust/10 text-ink" : "hover:bg-kraft/20"
                       }`}
                     >
-                      <span className="block text-[10px] uppercase tracking-[0.2em] text-ink/40">
+                      <span className="block text-[12px] uppercase tracking-[0.2em] text-ink/40">
                         #{idx + 1}
                         {p.url && isPdf(p.url) ? " · pdf" : " · img"}
                       </span>
@@ -192,7 +192,7 @@ export default function ProofReviewModal({
                         UTR {p.utr ?? "—"}
                       </span>
                       {p.created_at && (
-                        <span className="mt-0.5 block text-[10px] text-ink/40">
+                        <span className="mt-0.5 block text-[12px] text-ink/40">
                           {new Date(p.created_at).toLocaleString()}
                         </span>
                       )}
@@ -201,7 +201,7 @@ export default function ProofReviewModal({
                 );
               })}
               {!loading && proofs.length === 0 && (
-                <li className="px-3 py-6 text-center font-mono text-[10px] text-ink/40">
+                <li className="px-3 py-6 text-center font-mono text-[12px] text-ink/40">
                   No proofs uploaded
                 </li>
               )}
@@ -212,7 +212,7 @@ export default function ProofReviewModal({
           <section className="flex min-w-0 flex-1 items-center justify-center bg-ink/5 p-3">
             {loading && <Spinner variant="card" label="Loading proofs" />}
             {error && !loading && (
-              <p className="font-mono text-xs text-rust">{error}</p>
+              <p className="font-mono text-[13px] text-rust">{error}</p>
             )}
             {!loading && !error && active?.url ? (
               isPdf(active.url) ? (
@@ -232,7 +232,7 @@ export default function ProofReviewModal({
             ) : (
               !loading &&
               !error && (
-                <p className="font-mono text-xs text-ink/40">
+                <p className="font-mono text-[13px] text-ink/40">
                   Select a document on the left.
                 </p>
               )
@@ -242,7 +242,7 @@ export default function ProofReviewModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 border-t-2 border-ink bg-kraft/10 px-4 py-3">
-          <div className="font-mono text-[11px] text-ink/60">
+          <div className="font-mono text-[13px] text-ink/60">
             {active?.url && (
               <a
                 href={active.url}
@@ -261,7 +261,7 @@ export default function ProofReviewModal({
                   type="button"
                   onClick={() => decide("reject")}
                   disabled={!!busy}
-                  className="border-2 border-rust px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white disabled:opacity-40"
+                  className="border-2 border-rust px-4 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white disabled:opacity-40"
                 >
                   {busy === "reject" ? "…" : "Reject"}
                 </button>
@@ -269,13 +269,13 @@ export default function ProofReviewModal({
                   type="button"
                   onClick={() => decide("verify")}
                   disabled={!!busy}
-                  className="border-2 border-moss bg-moss px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-white disabled:opacity-40"
+                  className="border-2 border-moss bg-moss px-4 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-white disabled:opacity-40"
                 >
                   {busy === "verify" ? "…" : "Verify"}
                 </button>
               </>
             ) : (
-              <span className="font-mono text-[11px] text-ink/50">
+              <span className="font-mono text-[13px] text-ink/50">
                 {status === "verified"
                   ? "Already verified"
                   : status === "rejected"
@@ -299,7 +299,7 @@ function StatusBadge({ status }: { status: string }) {
         : "border-ink/40 text-ink/70";
   return (
     <span
-      className={`inline-block border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] ${cls}`}
+      className={`inline-block border px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] ${cls}`}
     >
       {status}
     </span>

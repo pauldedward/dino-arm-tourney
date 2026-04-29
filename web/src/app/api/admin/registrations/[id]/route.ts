@@ -35,7 +35,7 @@ export async function GET(
       `id, event_id, full_name, initial, dob, gender, affiliation_kind,
        district, team, mobile, aadhaar, aadhaar_masked, declared_weight_kg,
        nonpara_classes, nonpara_hand, nonpara_hands, age_categories,
-       is_para, para_codes, para_hand, photo_url, photo_bytes,
+       is_para, para_codes, para_hand, weight_bump_up, photo_url, photo_bytes,
        paid_amount_inr, status, chest_no, athlete_id, channel,
        payments(amount_inr, status, method, utr, proof_url)`
     )
@@ -101,6 +101,7 @@ export async function GET(
       classes.includes("SENIOR") && classes.some((c) => c !== "SENIOR"),
     para_codes: (reg.para_codes as string[] | null) ?? [],
     para_hand: reg.para_hand ?? null,
+    weight_bump_up: reg.weight_bump_up === true,
     photo_key: reg.photo_url ?? null,
     photo_bytes: reg.photo_bytes ?? null,
     paid_amount_inr: pay?.amount_inr ?? reg.paid_amount_inr ?? 0,

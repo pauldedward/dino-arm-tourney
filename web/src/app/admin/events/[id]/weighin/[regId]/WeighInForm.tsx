@@ -16,16 +16,21 @@ export default function WeighInForm({
   declared,
   queueHref,
   currentPhotoUrl,
+  isPara,
+  initialBumpUp,
 }: {
   registrationId: string;
   declared: number | null;
   queueHref: string;
   currentPhotoUrl: string | null;
+  isPara: boolean;
+  initialBumpUp: boolean;
 }) {
   const router = useRouter();
   const [scaleBlob, setScaleBlob] = useState<Blob | null>(null);
   const [athleteBlob, setAthleteBlob] = useState<Blob | null>(null);
   const [kg, setKg] = useState<string>("");
+  const [bumpUp, setBumpUp] = useState<boolean>(initialBumpUp);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -44,6 +49,10 @@ export default function WeighInForm({
     fd.set("measured_kg", parsed.toFixed(2));
     if (scaleBlob) fd.set("file", scaleBlob, "scale.jpg");
     if (athleteBlob) fd.set("athlete_file", athleteBlob, "athlete.jpg");
+    // Persist the operator's bump choice with the same write so the
+    // resolver picks it up on the very next category-sheet refresh.
+    // Server ignores the field for para entries.
+    if (!isPara) fd.set("weight_bump_up", bumpUp ? "true" : "false");
 
     if (navigator.onLine) {
       try {
@@ -169,6 +178,30 @@ export default function WeighInForm({
             </span>
           )}
         </label>
+
+        {!isPara && (
+          <label
+            className={`flex cursor-pointer items-center gap-3 border-2 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.15em] ${
+              bumpUp
+                ? "border-rust bg-rust/10 text-rust"
+                : "border-ink/40 text-ink/70 hover:border-ink"
+            }`}
+            title="Compete one weight class above the resolved one. No-op at the open bucket."
+          >
+            <input
+              type="checkbox"
+              checked={bumpUp}
+              onChange={(e) => setBumpUp(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="flex-1">+1 weight class</span>
+            {initialBumpUp !== bumpUp && (
+              <span className="font-mono text-[9px] tracking-normal normal-case text-ink/50">
+                changed
+              </span>
+            )}
+          </label>
+        )}
 
         <button
           type="submit"

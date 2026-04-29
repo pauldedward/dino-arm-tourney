@@ -54,7 +54,7 @@ export async function loadPaymentReport(
     svc
       .from("payment_summary")
       .select(
-        "registration_id, total_inr, collected_inr, remaining_inr, derived_status, latest_payer_label"
+        "registration_id, total_inr, collected_inr, received_inr, waived_inr, remaining_inr, derived_status, raw_status, latest_payer_label"
       )
       .eq("event_id", eventId)
       .limit(20000),
@@ -67,22 +67,37 @@ export async function loadPaymentReport(
     {
       total_inr: number;
       collected_inr: number;
+      received_inr: number;
+      waived_inr: number;
       remaining_inr: number;
       paid_by: string | null;
+      billable_inr: number;
     }
   >();
   for (const s of sumRes.data ?? []) {
     // If a registration somehow has multiple payments rows, fold them.
     const prev = summaryByReg.get(s.registration_id as string);
+    const isRejected = s.raw_status === "rejected";
     const total = (prev?.total_inr ?? 0) + Number(s.total_inr ?? 0);
     const collected = (prev?.collected_inr ?? 0) + Number(s.collected_inr ?? 0);
+    // Fall back to collected/0 when the SQL view predates 0037 — keeps
+    // the report rendering during the migration window.
+    const received =
+      (prev?.received_inr ?? 0) +
+      Number(s.received_inr ?? s.collected_inr ?? 0);
+    const waived = (prev?.waived_inr ?? 0) + Number(s.waived_inr ?? 0);
     const remaining =
       (prev?.remaining_inr ?? 0) +
       (s.derived_status === "pending" ? Number(s.remaining_inr ?? 0) : 0);
+    const billable =
+      (prev?.billable_inr ?? 0) + (isRejected ? 0 : Number(s.total_inr ?? 0));
     summaryByReg.set(s.registration_id as string, {
       total_inr: total,
       collected_inr: collected,
+      received_inr: received,
+      waived_inr: waived,
       remaining_inr: remaining,
+      billable_inr: billable,
       paid_by:
         (s.latest_payer_label as string | null) ?? prev?.paid_by ?? null,
     });
@@ -97,6 +112,8 @@ export async function loadPaymentReport(
       category: buildCategory(r.youth_hand, r.senior_hand, r.division),
       total_inr: s?.total_inr ?? 0,
       paid_inr: s?.collected_inr ?? 0,
+      received_inr: s?.received_inr ?? 0,
+      waived_inr: s?.waived_inr ?? 0,
       due_inr: s?.remaining_inr ?? 0,
       paid_by: s?.paid_by ?? null,
     };
@@ -104,15 +121,35 @@ export async function loadPaymentReport(
 
   const total_athletes = rows.length;
   const total_paid = rows.reduce((s, r) => s + r.paid_inr, 0);
+  const total_received = rows.reduce((s, r) => s + r.received_inr, 0);
+  const total_waived = rows.reduce((s, r) => s + r.waived_inr, 0);
   const total_due = rows.reduce((s, r) => s + r.due_inr, 0);
+  const total_billable = Array.from(summaryByReg.values()).reduce(
+    (s, v) => s + v.billable_inr,
+    0
+  );
+  const total_effective = Math.max(0, total_billable - total_waived);
+  const waived_n = rows.filter((r) => r.waived_inr > 0).length;
+  // % collected = real money / effective billable. Waivers don't dilute
+  // the rate — a fully waived field reads as 100% collected.
   const percent_paid =
-    total_paid + total_due > 0
-      ? (total_paid / (total_paid + total_due)) * 100
-      : 0;
+    total_effective > 0
+      ? Math.min(100, (total_received / total_effective) * 100)
+      : 100;
 
   return {
     rows,
-    totals: { total_athletes, total_paid, total_due, percent_paid },
+    totals: {
+      total_athletes,
+      total_billable,
+      total_received,
+      total_waived,
+      total_effective,
+      total_paid,
+      total_due,
+      waived_n,
+      percent_paid,
+    },
   };
 }
 

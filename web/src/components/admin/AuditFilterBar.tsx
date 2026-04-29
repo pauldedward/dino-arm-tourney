@@ -126,7 +126,7 @@ export default function AuditFilterBar({
     <div className="space-y-3 border-2 border-ink p-3">
       {/* Quick presets */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+        <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
           Quick:
         </span>
         {PRESETS.map((p) => (
@@ -134,7 +134,7 @@ export default function AuditFilterBar({
             key={p.label}
             type="button"
             onClick={() => applyPreset(p.minutes)}
-            className="border-2 border-ink/30 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink hover:bg-kraft/30"
+            className="border-2 border-ink/30 px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink hover:bg-kraft/30"
           >
             {p.label}
           </button>
@@ -143,11 +143,11 @@ export default function AuditFilterBar({
 
       <div className="grid gap-3 md:grid-cols-6">
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Event</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Event</span>
           <select
             value={event}
             onChange={(e) => setEvent(e.target.value)}
-            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-xs"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-[13px]"
           >
             <option value="">(any)</option>
             {events.map((o) => (
@@ -159,11 +159,11 @@ export default function AuditFilterBar({
         </label>
 
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Category</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Category</span>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-xs"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-[13px]"
           >
             <option value="">(any)</option>
             {categories.map(([id, label]) => (
@@ -175,11 +175,11 @@ export default function AuditFilterBar({
         </label>
 
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Action</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Action</span>
           <select
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-xs"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-[13px]"
           >
             <option value="">(any)</option>
             {visibleActions.map((c) => (
@@ -191,11 +191,11 @@ export default function AuditFilterBar({
         </label>
 
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Actor</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Actor</span>
           <select
             value={actor}
             onChange={(e) => setActor(e.target.value)}
-            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-xs"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-[13px]"
           >
             <option value="">(any)</option>
             {actors.map((o) => (
@@ -207,19 +207,19 @@ export default function AuditFilterBar({
         </label>
 
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Since</span>
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Since</span>
           <input
             type="datetime-local"
             value={since}
             onChange={(e) => setSince(e.target.value)}
-            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-xs"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-2 py-2 font-mono text-[13px]"
           />
         </label>
 
         <div className="flex items-end gap-2">
           <a
             href={csvHref}
-            className="flex h-10 flex-1 items-center justify-center border-2 border-ink px-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
+            className="flex h-10 flex-1 items-center justify-center border-2 border-ink px-3 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
           >
             CSV ↓
           </a>
@@ -227,7 +227,7 @@ export default function AuditFilterBar({
             <button
               type="button"
               onClick={clearAll}
-              className="h-10 border-2 border-ink/40 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+              className="h-10 border-2 border-ink/40 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
             >
               Clear
             </button>

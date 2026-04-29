@@ -34,6 +34,9 @@ interface BulkRowBody {
   include_senior?: boolean;
   para_codes?: string[];
   para_hand?: Hand | null;
+  /** Non-para opt-in: place the entry one weight bucket above the
+   *  one the weight resolves to. Ignored for para entries. */
+  weight_bump_up?: boolean;
   photo_key?: string;
   photo_bytes?: number;
 
@@ -258,6 +261,7 @@ export async function POST(req: Request) {
     nonpara_hands: nonparaHandsArr.length > 0 ? nonparaHandsArr : null,
     para_codes: para,
     para_hand: para.length > 0 ? body.para_hand ?? null : null,
+    weight_bump_up: nonpara.length > 0 ? body.weight_bump_up === true : false,
     photo_url: body.photo_key ?? null,
     photo_bytes: body.photo_bytes ?? null,
     paid_amount_inr: body.paid_amount_inr ?? 0,
@@ -400,6 +404,7 @@ export async function POST(req: Request) {
       total_fee_inr: totalFee,
       collected_inr: collectedEffective,
       channel,
+      weight_bump_up: nonpara.length > 0 ? body.weight_bump_up === true : false,
       weighed_in: !!weighInId,
     },
   });

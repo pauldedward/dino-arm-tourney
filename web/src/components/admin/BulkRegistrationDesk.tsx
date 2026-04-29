@@ -93,6 +93,10 @@ interface Draft {
 
   approve_weighin: boolean;
 
+  /** Non-para opt-in: place the entry one weight bucket above the
+   *  one the weight resolves to. Ignored in para mode. */
+  weight_bump_up: boolean;
+
   photo_key: string | null;
   photo_preview: string | null;
   photo_uploading: boolean;
@@ -135,6 +139,7 @@ function emptyDraft(
     payment_utr: "",
     channel,
     approve_weighin: false,
+    weight_bump_up: false,
     photo_key: null,
     photo_preview: null,
     photo_uploading: false,
@@ -683,6 +688,7 @@ export default function BulkRegistrationDesk({
         payment_utr: (p.payment_utr as string) ?? "",
         channel: p.channel === "online" ? "online" : "offline",
         approve_weighin: Boolean(p.approve_weighin),
+        weight_bump_up: Boolean(p.weight_bump_up),
         photo_key: (p.photo_key as string) ?? null,
         photo_preview: null,
         photo_uploading: false,
@@ -838,6 +844,7 @@ export default function BulkRegistrationDesk({
       payment_utr: draft.payment_method === "manual_upi" ? draft.payment_utr.trim() || undefined : undefined,
       payment_proof_key: draft.payment_method === "manual_upi" ? draft.proof_key ?? undefined : undefined,
       approve_weighin: draft.approve_weighin,
+      weight_bump_up: draft.mode === "nonpara" ? draft.weight_bump_up : false,
       channel: draft.channel,
     };
 
@@ -984,7 +991,7 @@ export default function BulkRegistrationDesk({
       >
         {editingClientId && (
           <div className="flex items-center justify-between gap-3 border-2 border-rust bg-rust/10 p-3">
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-rust">
+            <p className="font-mono text-[13px] font-bold uppercase tracking-[0.2em] text-rust">
               Editing
               {(() => {
                 const r = saved.find((x) => x.client_id === editingClientId);
@@ -995,7 +1002,7 @@ export default function BulkRegistrationDesk({
             <button
               type="button"
               onClick={cancelEdit}
-              className="border-2 border-rust px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
+              className="border-2 border-rust px-3 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
             >
               Cancel
             </button>
@@ -1003,7 +1010,7 @@ export default function BulkRegistrationDesk({
         )}
         {/* Identity */}
         <fieldset className="space-y-2">
-          <legend className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+          <legend className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
             Identity
           </legend>
           <div className="flex gap-2">
@@ -1052,7 +1059,7 @@ export default function BulkRegistrationDesk({
                     type="button"
                     key={g}
                     onClick={() => patch({ gender: g })}
-                    className={`h-9 flex-1 border-2 font-mono text-xs font-bold ${
+                    className={`h-9 flex-1 border-2 font-mono text-[13px] font-bold ${
                       draft.gender === g
                         ? "border-ink bg-ink text-bone"
                         : "border-ink/40 hover:border-ink"
@@ -1092,7 +1099,7 @@ export default function BulkRegistrationDesk({
           </div>
 
           {age !== null && (
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+            <p className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
               Age on match day: <span className="text-ink">{age}</span>
             </p>
           )}
@@ -1100,7 +1107,7 @@ export default function BulkRegistrationDesk({
 
         {/* Affiliation */}
         <fieldset className="space-y-2">
-          <legend className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+          <legend className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
             Affiliation
           </legend>
           <div className="flex gap-2">
@@ -1109,7 +1116,7 @@ export default function BulkRegistrationDesk({
                 key={k}
                 type="button"
                 onClick={() => patch({ affiliation_kind: k })}
-                className={`h-9 px-4 border-2 font-mono text-xs font-bold uppercase tracking-[0.2em] ${
+                className={`h-9 px-4 border-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] ${
                   draft.affiliation_kind === k
                     ? "border-ink bg-ink text-bone"
                     : "border-ink/40 hover:border-ink"
@@ -1139,7 +1146,7 @@ export default function BulkRegistrationDesk({
 
         {/* Class + hand */}
         <fieldset className="space-y-2">
-          <legend className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+          <legend className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
             Category
           </legend>
 
@@ -1159,7 +1166,7 @@ export default function BulkRegistrationDesk({
                     para_hand: "",
                   })
                 }
-                className={`h-9 px-4 border-2 font-mono text-xs font-bold uppercase tracking-[0.2em] ${
+                className={`h-9 px-4 border-2 font-mono text-[13px] font-bold uppercase tracking-[0.2em] ${
                   draft.mode === m
                     ? "border-ink bg-ink text-bone"
                     : "border-ink/40 hover:border-ink"
@@ -1190,7 +1197,7 @@ export default function BulkRegistrationDesk({
               />
             </Field>
             <label
-              className={`flex h-9 cursor-pointer items-center gap-2 border-2 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.15em] ${
+              className={`flex h-9 cursor-pointer items-center gap-2 border-2 px-3 font-mono text-[13px] font-bold uppercase tracking-[0.15em] ${
                 draft.approve_weighin
                   ? "border-moss bg-moss/10 text-moss"
                   : "border-ink/40 text-ink/70 hover:border-ink"
@@ -1205,6 +1212,24 @@ export default function BulkRegistrationDesk({
               />
               Weighed-in ✓
             </label>
+            {draft.mode === "nonpara" && (
+              <label
+                className={`flex h-9 cursor-pointer items-center gap-2 border-2 px-3 font-mono text-[13px] font-bold uppercase tracking-[0.15em] ${
+                  draft.weight_bump_up
+                    ? "border-rust bg-rust/10 text-rust"
+                    : "border-ink/40 text-ink/70 hover:border-ink"
+                }`}
+                title="Compete one weight class above the one the measured weight resolves to (no-op at the open bucket)."
+              >
+                <input
+                  type="checkbox"
+                  checked={draft.weight_bump_up}
+                  onChange={(e) => patch({ weight_bump_up: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                +1 weight class
+              </label>
+            )}
           </div>
 
           {draft.mode === "nonpara" ? (
@@ -1232,7 +1257,7 @@ export default function BulkRegistrationDesk({
 
               {seniorAddOnAvailable && (
                 <div className="space-y-2 border border-ink/30 bg-kraft/10 p-3">
-                  <label className="flex cursor-pointer items-center gap-2 font-mono text-xs">
+                  <label className="flex cursor-pointer items-center gap-2 font-mono text-[13px]">
                     <input
                       type="checkbox"
                       checked={draft.also_senior}
@@ -1299,9 +1324,9 @@ export default function BulkRegistrationDesk({
                   const sel = allowedPara.find((c) => c.code === draft.para_code);
                   if (!sel) return null;
                   return (
-                    <div className="min-w-0 flex-1 self-end border border-ink/30 bg-kraft/10 px-2 py-1.5 font-mono text-[10px] leading-snug text-ink/70">
+                    <div className="min-w-0 flex-1 self-end border border-ink/30 bg-kraft/10 px-2 py-1.5 font-mono text-[12px] leading-snug text-ink/70">
                       <span
-                        className={`mr-1 inline-block border px-1 py-0.5 text-[9px] font-bold uppercase tracking-[0.15em] ${
+                        className={`mr-1 inline-block border px-1 py-0.5 text-[11px] font-bold uppercase tracking-[0.15em] ${
                           sel.posture === "Sitting"
                             ? "border-rust bg-rust/10 text-rust"
                             : "border-ink/40 text-ink/70"
@@ -1323,7 +1348,7 @@ export default function BulkRegistrationDesk({
 
         {/* Photo */}
         <fieldset className="space-y-1">
-          <legend className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+          <legend className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
             Athlete photo
           </legend>
           <div className="flex items-center gap-3">
@@ -1334,14 +1359,14 @@ export default function BulkRegistrationDesk({
                 className="h-16 w-14 border-2 border-ink object-cover"
               />
             ) : (
-              <div className="flex h-16 w-14 items-center justify-center border-2 border-dashed border-ink/40 font-mono text-[9px] uppercase text-ink/40">
+              <div className="flex h-16 w-14 items-center justify-center border-2 border-dashed border-ink/40 font-mono text-[11px] uppercase text-ink/40">
                 no photo
               </div>
             )}
             <button
               type="button"
               onClick={() => setCam("photo")}
-              className="border-2 border-ink bg-ink px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
+              className="border-2 border-ink bg-ink px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
             >
               📷 capture
             </button>
@@ -1354,9 +1379,9 @@ export default function BulkRegistrationDesk({
               <Spinner variant="inline" label="Uploading" />
             )}
             {draft.photo_key && !draft.photo_uploading && (
-              <span className="font-mono text-[10px] uppercase text-moss">✓ ready</span>
+              <span className="font-mono text-[12px] uppercase text-moss">✓ ready</span>
             )}
-            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.2em] text-ink/40">
+            <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.2em] text-ink/40">
               optional
             </span>
           </div>
@@ -1364,11 +1389,11 @@ export default function BulkRegistrationDesk({
 
         {/* Payment */}
         <fieldset className="space-y-2">
-          <legend className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+          <legend className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
             Payment
           </legend>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
               Channel:
             </span>
             {(
@@ -1390,7 +1415,7 @@ export default function BulkRegistrationDesk({
                       total_touched: draft.total_touched,
                     })
                   }
-                  className={`h-8 border-2 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.2em] ${
+                  className={`h-8 border-2 px-3 font-mono text-[13px] font-bold uppercase tracking-[0.2em] ${
                     active ? "border-ink bg-ink text-bone" : "border-ink/40 hover:border-ink"
                   }`}
                   title={`Per-hand fee ₹${c.fee}`}
@@ -1400,13 +1425,13 @@ export default function BulkRegistrationDesk({
               );
             })}
             {effectiveOfflineFee !== defaultFee && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+              <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
                 ₹{effectiveOfflineFee} desk · ₹{defaultFee} online
               </span>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
               Method:
             </span>
             {(
@@ -1421,7 +1446,7 @@ export default function BulkRegistrationDesk({
                   key={m.value}
                   type="button"
                   onClick={() => patch({ payment_method: m.value })}
-                  className={`h-8 border-2 px-3 font-mono text-[11px] font-bold uppercase tracking-[0.2em] ${
+                  className={`h-8 border-2 px-3 font-mono text-[13px] font-bold uppercase tracking-[0.2em] ${
                     active ? "border-ink bg-ink text-bone" : "border-ink/40 hover:border-ink"
                   }`}
                 >
@@ -1430,7 +1455,7 @@ export default function BulkRegistrationDesk({
               );
             })}
             {paymentMode === "offline" && draft.payment_method === "manual_upi" && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-rust">
+              <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-rust">
                 event is offline · prefer Cash
               </span>
             )}
@@ -1486,7 +1511,7 @@ export default function BulkRegistrationDesk({
             </Field>
             {waivedFee > 0 && (
               <span
-                className="border-2 border-gold bg-gold/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink"
+                className="border-2 border-gold bg-gold/10 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-ink"
                 title={`Suggested ₹${suggestedTotal} − Total ₹${totalFee}`}
               >
                 Waived ₹{waivedFee}
@@ -1513,7 +1538,7 @@ export default function BulkRegistrationDesk({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+            <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
               Quick:
             </span>
             {(
@@ -1530,7 +1555,7 @@ export default function BulkRegistrationDesk({
                   onClick={() =>
                     patch({ paid_amount_inr: String(q.value), paid_touched: true })
                   }
-                  className={`h-7 border-2 px-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] disabled:opacity-50 ${
+                  className={`h-7 border-2 px-2 font-mono text-[12px] font-bold uppercase tracking-[0.15em] disabled:opacity-50 ${
                     active
                       ? "border-ink bg-ink text-bone"
                       : "border-ink/40 hover:border-ink"
@@ -1540,7 +1565,7 @@ export default function BulkRegistrationDesk({
                 </button>
               );
             })}
-            <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50">
+            <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50">
               {entryCount || 1} {entryCount === 1 ? "entry" : "entries"} × ₹{defaultFee} = ₹{suggestedTotal}
               {waivedFee > 0 && <span className="ml-2 text-gold">· waived ₹{waivedFee}</span>}
             </span>
@@ -1554,7 +1579,7 @@ export default function BulkRegistrationDesk({
                 className="h-20 w-28 border-2 border-ink object-cover"
               />
             ) : (
-              <div className="flex h-20 w-28 items-center justify-center border-2 border-dashed border-ink/40 font-mono text-[10px] uppercase text-ink/40">
+              <div className="flex h-20 w-28 items-center justify-center border-2 border-dashed border-ink/40 font-mono text-[12px] uppercase text-ink/40">
                 no proof
               </div>
             )}
@@ -1562,7 +1587,7 @@ export default function BulkRegistrationDesk({
               <button
                 type="button"
                 onClick={() => setCam("proof")}
-                className="border-2 border-ink px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
+                className="border-2 border-ink px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:bg-kraft/30"
               >
                 📷 capture proof
               </button>
@@ -1575,19 +1600,19 @@ export default function BulkRegistrationDesk({
                 <Spinner variant="inline" label="Uploading" />
               )}
               {draft.proof_key && !draft.proof_uploading && (
-                <span className="font-mono text-[10px] uppercase text-moss">✓ ready</span>
+                <span className="font-mono text-[12px] uppercase text-moss">✓ ready</span>
               )}
             </div>
           </div>
           ) : (
-            <p className="border-2 border-dashed border-ink/30 bg-kraft/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/60">
+            <p className="border-2 border-dashed border-ink/30 bg-kraft/10 px-3 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-ink/60">
               Cash collected at counter — no UTR/proof needed.
             </p>
           ))}
         </fieldset>
 
         {error && (
-          <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-xs text-rust">
+          <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-[13px] text-rust">
             {error}
           </div>
         )}
@@ -1595,7 +1620,7 @@ export default function BulkRegistrationDesk({
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            className={`border-2 px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.25em] text-bone ${
+            className={`border-2 px-6 py-3 font-mono text-[13px] font-bold uppercase tracking-[0.25em] text-bone ${
               editingClientId
                 ? "border-rust bg-rust hover:bg-rust/80"
                 : "border-ink bg-ink hover:bg-rust hover:border-rust"
@@ -1606,11 +1631,11 @@ export default function BulkRegistrationDesk({
           <button
             type="button"
             onClick={editingClientId ? cancelEdit : () => setDraft(emptyDraft(effectiveOfflineFee, defaultMethod, "offline"))}
-            className="border-2 border-ink/40 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-ink/60 hover:border-ink hover:text-ink"
+            className="border-2 border-ink/40 px-4 py-3 font-mono text-[12px] font-bold uppercase tracking-[0.25em] text-ink/60 hover:border-ink hover:text-ink"
           >
             {editingClientId ? "Cancel edit" : "Clear form"}
           </button>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/40">
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/40">
             Ctrl+Enter
           </span>
         </div>
@@ -1621,10 +1646,10 @@ export default function BulkRegistrationDesk({
         {/* Sticky search header so it's always reachable while scrolling. */}
         <div className="sticky top-0 z-10 space-y-2 border-b-2 border-ink bg-bone p-4">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-ink/60">
+            <p className="font-mono text-[12px] font-bold uppercase tracking-[0.3em] text-ink/60">
               Registrations
             </p>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50 tabular-nums">
+            <p className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50 tabular-nums">
               {(() => {
                 const sessionCount = saved.filter(
                   (r) => (r.saved_at ?? 0) > 0
@@ -1649,14 +1674,14 @@ export default function BulkRegistrationDesk({
             if (errCount === 0) return null;
             return (
               <div className="flex items-center gap-2 border-2 border-rust bg-rust/5 px-2 py-1">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-rust">
+                <span className="font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-rust">
                   {errCount} failed
                 </span>
                 <div className="ml-auto flex gap-1">
                   <button
                     type="button"
                     onClick={retryAllErrors}
-                    className="border-2 border-rust px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
+                    className="border-2 border-rust px-2 py-0.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
                   >
                     Retry all
                   </button>
@@ -1675,7 +1700,7 @@ export default function BulkRegistrationDesk({
                         clearFailedRows();
                       }
                     }}
-                    className="border-2 border-ink/40 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink/70 hover:border-ink hover:text-ink"
+                    className="border-2 border-ink/40 px-2 py-0.5 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-ink/70 hover:border-ink hover:text-ink"
                   >
                     Clear
                   </button>
@@ -1685,7 +1710,7 @@ export default function BulkRegistrationDesk({
           })()}
           <div className="relative">
             <span
-              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-ink/40"
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[13px] text-ink/40"
               aria-hidden
             >
               ⌕
@@ -1707,7 +1732,7 @@ export default function BulkRegistrationDesk({
               autoComplete="off"
               spellCheck={false}
             />
-            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 hidden font-mono text-[10px] uppercase tracking-[0.15em] text-ink/30 sm:block">
+            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 hidden font-mono text-[12px] uppercase tracking-[0.15em] text-ink/30 sm:block">
               {searching ? "⟳" : "/"}
             </span>
             {query && (
@@ -1719,7 +1744,7 @@ export default function BulkRegistrationDesk({
                 }}
                 title="Clear (Esc)"
                 aria-label="Clear search"
-                className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 font-mono text-xs text-ink/50 hover:text-ink"
+                className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 font-mono text-[13px] text-ink/50 hover:text-ink"
               >
                 ✕
               </button>
@@ -1728,7 +1753,7 @@ export default function BulkRegistrationDesk({
           {/* Two-axis filter chips: payment and check-in are orthogonal. */}
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-1">
-              <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.25em] text-ink/40">
+              <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.25em] text-ink/40">
                 Pay
               </span>
               {(
@@ -1742,7 +1767,7 @@ export default function BulkRegistrationDesk({
                   key={value || "all-pay"}
                   type="button"
                   onClick={() => setPayFilter(value)}
-                  className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${
+                  className={`border-2 px-2 py-0.5 font-mono text-[12px] font-bold uppercase tracking-[0.15em] ${
                     payFilter === value
                       ? "border-ink bg-ink text-bone"
                       : "border-ink/30 text-ink/60 hover:border-ink hover:text-ink"
@@ -1753,7 +1778,7 @@ export default function BulkRegistrationDesk({
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-1">
-              <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.25em] text-ink/40">
+              <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.25em] text-ink/40">
                 Check-in
               </span>
               {(
@@ -1767,7 +1792,7 @@ export default function BulkRegistrationDesk({
                   key={value || "all-checkin"}
                   type="button"
                   onClick={() => setCheckinFilter(value)}
-                  className={`border-2 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${
+                  className={`border-2 px-2 py-0.5 font-mono text-[12px] font-bold uppercase tracking-[0.15em] ${
                     checkinFilter === value
                       ? "border-ink bg-ink text-bone"
                       : "border-ink/30 text-ink/60 hover:border-ink hover:text-ink"
@@ -1784,7 +1809,7 @@ export default function BulkRegistrationDesk({
         <div className="p-4 pt-3">
           {saved.length === 0 ? (
             <div className="border-2 border-dashed border-ink/30 p-6 text-center">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/40">
+              <p className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/40">
                 {query || payFilter || checkinFilter
                   ? "No matches."
                   : "No registrations yet for this event."}
@@ -1797,7 +1822,7 @@ export default function BulkRegistrationDesk({
                     setPayFilter("");
                     setCheckinFilter("");
                   }}
-                  className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+                  className="mt-3 font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
                 >
                   Clear filters
                 </button>
@@ -1815,7 +1840,7 @@ export default function BulkRegistrationDesk({
                 const renderGroupHeader = (label: string, n: number) => (
                   <li
                     key={`hdr-${label}`}
-                    className="sticky top-0 bg-bone pb-1 pt-2 font-mono text-[9px] font-bold uppercase tracking-[0.3em] text-ink/40"
+                    className="sticky top-0 bg-bone pb-1 pt-2 font-mono text-[11px] font-bold uppercase tracking-[0.3em] text-ink/40"
                   >
                     {label} · {n}
                   </li>
@@ -1877,7 +1902,7 @@ export default function BulkRegistrationDesk({
                             </span>
                           ) : null}
                         </p>
-                        <p className="truncate font-mono text-[10px] uppercase tracking-[0.15em] text-ink/60">
+                        <p className="truncate font-mono text-[12px] uppercase tracking-[0.15em] text-ink/60">
                           <Highlight
                             text={r.district ?? r.team ?? "—"}
                             q={query}
@@ -1894,7 +1919,7 @@ export default function BulkRegistrationDesk({
                           <CheckinRailPill row={r} />
                         </div>
                         {status === "error" && r.error && (
-                          <p className="mt-1 font-mono text-[10px] text-rust">
+                          <p className="mt-1 font-mono text-[12px] text-rust">
                             {r.error}
                           </p>
                         )}
@@ -1907,7 +1932,7 @@ export default function BulkRegistrationDesk({
                         {status === "syncing" && (
                           <span
                             title="Uploading to cloud…"
-                            className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50"
+                            className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/50"
                           >
                             ⟳ sync
                           </span>
@@ -1915,13 +1940,13 @@ export default function BulkRegistrationDesk({
                         {status === "saved" && !isEditing && (
                           <span
                             title="Saved to cloud"
-                            className="font-mono text-[10px] uppercase tracking-[0.2em] text-moss"
+                            className="font-mono text-[12px] uppercase tracking-[0.2em] text-moss"
                           >
                             ✓
                           </span>
                         )}
                         {isEditing && (
-                          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-rust">
+                          <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-rust">
                             editing
                           </span>
                         )}
@@ -1929,7 +1954,7 @@ export default function BulkRegistrationDesk({
                           <button
                             type="button"
                             onClick={() => retryRow(r.client_id!)}
-                            className="border-2 border-rust px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
+                            className="border-2 border-rust px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
                           >
                             retry
                           </button>
@@ -1940,7 +1965,7 @@ export default function BulkRegistrationDesk({
                               type="button"
                               title="Edit this row"
                               onClick={() => void loadRow(r.client_id!)}
-                              className="border-2 border-ink/40 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-ink/70 hover:border-ink hover:text-ink"
+                              className="border-2 border-ink/40 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-ink/70 hover:border-ink hover:text-ink"
                             >
                               ✎
                             </button>
@@ -1958,7 +1983,7 @@ export default function BulkRegistrationDesk({
                                   void deleteRow(r.client_id!);
                                 }
                               }}
-                              className="border-2 border-ink/40 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-ink/70 hover:border-rust hover:text-rust"
+                              className="border-2 border-ink/40 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-ink/70 hover:border-rust hover:text-rust"
                             >
                               ✕
                             </button>
@@ -1988,7 +2013,7 @@ export default function BulkRegistrationDesk({
               })()}
             </ul>
           )}
-          <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.2em] text-ink/40">
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink/40">
             <kbd className="border border-ink/30 px-1">/</kbd> focus search ·{" "}
             <kbd className="border border-ink/30 px-1">Esc</kbd> clear · click
             a row to load it
@@ -2054,7 +2079,7 @@ function Field({
 }) {
   return (
     <label className={`flex flex-col gap-1 ${grow ? "flex-1" : ""} ${w ?? ""}`}>
-      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/60">
+      <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-ink/60">
         {label}
       </span>
       {children}
@@ -2076,7 +2101,7 @@ function HandPicker({
           key={h}
           type="button"
           onClick={() => onChange(h)}
-          className={`h-9 flex-1 border-2 font-mono text-xs font-bold ${
+          className={`h-9 flex-1 border-2 font-mono text-[13px] font-bold ${
             value === h ? "border-ink bg-ink text-bone" : "border-ink/40 hover:border-ink"
           }`}
         >
@@ -2106,7 +2131,7 @@ function Pill({
       : "border-ink/40 text-ink/70";
   return (
     <span
-      className={`inline-block border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.15em] ${cls}`}
+      className={`inline-block border px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.15em] ${cls}`}
     >
       {label}
     </span>
@@ -2157,7 +2182,7 @@ function FileFallback({
       <button
         type="button"
         onClick={() => ref.current?.click()}
-        className="border-2 border-ink/40 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] hover:border-ink"
+        className="border-2 border-ink/40 px-3 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.2em] hover:border-ink"
       >
         {label}
       </button>
@@ -2392,7 +2417,7 @@ function DobInput({
       </div>
       {problem && (
         <p
-          className="mt-1 font-mono text-[10px] uppercase tracking-[0.15em] text-rust"
+          className="mt-1 font-mono text-[12px] uppercase tracking-[0.15em] text-rust"
           role="alert"
         >
           {problem}
@@ -2472,7 +2497,7 @@ function DistrictCombo({
                 e.preventDefault();
                 pick(d);
               }}
-              className={`cursor-pointer px-3 py-1.5 font-mono text-xs ${
+              className={`cursor-pointer px-3 py-1.5 font-mono text-[13px] ${
                 i === hover ? "bg-ink text-bone" : "hover:bg-kraft/30"
               }`}
             >

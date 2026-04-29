@@ -121,4 +121,52 @@ describe("resolveEntries", () => {
       .map((e) => e.hand);
     assert.deepEqual(seniorHands, ["R"]);
   });
+
+  it("weight_bump_up moves non-para entry one bucket up", () => {
+    // Senior M @ 78 kg normally falls in −80 kg; bump → −85 kg.
+    const base = resolveEntries(
+      { ...baseReg, declared_weight_kg: 78 },
+      null
+    );
+    const bumped = resolveEntries(
+      { ...baseReg, declared_weight_kg: 78, weight_bump_up: true },
+      null
+    );
+    assert.equal(base[0].weight_class, "−80 kg");
+    assert.equal(bumped[0].weight_class, "−85 kg");
+    assert.equal(bumped[0].category_code, "M-−85 kg-R");
+  });
+
+  it("weight_bump_up at the open bucket is a no-op", () => {
+    // Senior M @ 130 kg already lands in the open (+110 kg) bucket.
+    const base = resolveEntries(
+      { ...baseReg, declared_weight_kg: 130 },
+      null
+    );
+    const bumped = resolveEntries(
+      { ...baseReg, declared_weight_kg: 130, weight_bump_up: true },
+      null
+    );
+    assert.equal(base[0].weight_class, bumped[0].weight_class);
+    assert.equal(bumped[0].category_code, base[0].category_code);
+  });
+
+  it("weight_bump_up does not affect para entries", () => {
+    const out = resolveEntries(
+      {
+        ...baseReg,
+        nonpara_classes: [],
+        nonpara_hands: null,
+        para_codes: ["U"],
+        para_hand: "R",
+        declared_weight_kg: 65,
+        weight_bump_up: true,
+      },
+      null
+    );
+    // PIU Standing male buckets: 60, 70, 80, 90, open(90+).
+    // 65 kg → −70 kg even with bump on (bump is non-para only).
+    assert.equal(out.length, 1);
+    assert.equal(out[0].weight_class, "−70 kg");
+  });
 });

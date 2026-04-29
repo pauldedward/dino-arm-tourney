@@ -141,7 +141,7 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3 border-2 border-ink p-3">
         <label className="block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em]">
+          <span className="font-mono text-[12px] uppercase tracking-[0.2em]">
             Search
           </span>
           <input
@@ -157,12 +157,12 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
           <button
             type="button"
             onClick={() => setQ("")}
-            className="h-10 border-2 border-ink/30 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+            className="h-10 border-2 border-ink/30 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
           >
             Clear
           </button>
         )}
-        <p className="ml-auto font-mono text-[10px] text-ink/50">
+        <p className="ml-auto font-mono text-[12px] text-ink/50">
           <kbd className="border border-ink/40 px-1">/</kbd> search ·{" "}
           <kbd className="border border-ink/40 px-1">j/k</kbd> move ·{" "}
           <kbd className="border border-ink/40 px-1">Enter</kbd> capture
@@ -254,7 +254,7 @@ function Section({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.3em] text-ink/70 hover:text-ink"
+        className="flex w-full items-center gap-2 font-mono text-[13px] font-bold uppercase tracking-[0.3em] text-ink/70 hover:text-ink"
       >
         <span aria-hidden className="inline-block w-3 text-ink/50">
           {open ? "▾" : "▸"}
@@ -266,7 +266,7 @@ function Section({
       {open && (
         <div className="overflow-x-auto border-2 border-ink">
         <table className="w-full text-sm">
-          <thead className="border-b-2 border-ink bg-kraft/20 text-left font-mono text-[10px] uppercase tracking-[0.2em]">
+          <thead className="border-b-2 border-ink bg-kraft/20 text-left font-mono text-[12px] uppercase tracking-[0.2em]">
             <tr>
               <th className="px-3 py-3">#</th>
               <th className="px-3 py-3">Name</th>
@@ -301,15 +301,15 @@ function Section({
                     {r.initial ? `${r.initial}. ` : ""}
                     {r.full_name ?? "—"}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">
+                  <td className="px-3 py-2 font-mono text-[13px]">
                     {r.division ?? "—"}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-ink/70">
+                  <td className="px-3 py-2 font-mono text-[13px] text-ink/70">
                     {r.district ?? "—"}
                   </td>
                   <td className="px-3 py-2">
                     <span
-                      className={`inline-block border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] ${pay.cls}`}
+                      className={`inline-block border px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] ${pay.cls}`}
                     >
                       {pay.label}
                     </span>
@@ -327,7 +327,7 @@ function Section({
                       href={`/admin/events/${eventSlug}/weighin/${r.id}`}
                       prefetch
                       pendingLabel="Loading…"
-                      className="border border-ink px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-ink hover:text-bone"
+                      className="border border-ink px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] hover:bg-ink hover:text-bone"
                     >
                       {state === "done" ? "Re-weigh" : "Capture →"}
                     </PendingLink>
@@ -339,7 +339,7 @@ function Section({
               <tr>
                 <td
                   colSpan={8}
-                  className="px-3 py-6 text-center font-mono text-xs text-ink/50"
+                  className="px-3 py-6 text-center font-mono text-[13px] text-ink/50"
                 >
                   {state === "pending" ? "Nothing pending." : "No captures yet."}
                 </td>
@@ -350,7 +350,7 @@ function Section({
       </div>
       )}
       {open && showPager && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink bg-bone px-3 py-2 font-mono text-[11px]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink bg-bone px-3 py-2 font-mono text-[13px]">
           <div className="flex items-center gap-3 text-ink/70">
             <span>
               <span className="font-bold tabular-nums">
@@ -375,7 +375,7 @@ function Section({
                   setPageSize(Number(e.target.value));
                   setPage(1);
                 }}
-                className="border border-ink bg-bone px-2 py-1 font-mono text-[11px]"
+                className="border border-ink bg-bone px-2 py-1 font-mono text-[13px]"
               >
                 {PAGE_SIZE_OPTIONS.map((n) => (
                   <option key={n} value={n}>

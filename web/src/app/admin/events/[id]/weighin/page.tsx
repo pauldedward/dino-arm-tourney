@@ -43,13 +43,13 @@ export default async function WeighInQueuePage({
     <div className="space-y-8">
       <LiveRefresh tables={["registrations", "weigh_ins"]} eventId={eventId} />
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-ink/50">
+        <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-ink/50">
           {event.name} · Match-day console
         </p>
         <h1 className="mt-2 font-display text-5xl font-black tracking-tight">
           Weigh-in queue
         </h1>
-        <p className="mt-2 font-mono text-xs text-ink/60">
+        <p className="mt-2 font-mono text-[13px] text-ink/60">
           Weigh-in is open to every registered athlete — payment can be
           settled later. Rows with unverified payment are flagged so you
           can chase the dues, but their weight is still captured.
@@ -57,14 +57,14 @@ export default async function WeighInQueuePage({
         <PendingLink
           href={`/admin/events/${eventSlug}`}
           prefetch
-          className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.2em] underline hover:text-rust"
+          className="mt-3 inline-block font-mono text-[12px] uppercase tracking-[0.2em] underline hover:text-rust"
         >
           ← event
         </PendingLink>
       </div>
 
       {error && (
-        <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-xs text-rust">
+        <div className="border-2 border-rust bg-rust/10 p-3 font-mono text-[13px] text-rust">
           {error.message}
         </div>
       )}

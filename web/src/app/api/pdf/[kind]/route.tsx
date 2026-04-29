@@ -165,7 +165,7 @@ async function buildDocument(
         svc
           .from("registrations")
           .select(
-            "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, status, checkin_status"
+            "id, chest_no, full_name, district, declared_weight_kg, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_bump_up, status, checkin_status"
           )
           .eq("event_id", event.id),
         svc
@@ -220,6 +220,7 @@ async function buildDocument(
             ),
           para_codes: (r.para_codes as string[] | null) ?? [],
           para_hand: (r.para_hand as RegistrationLite["para_hand"]) ?? null,
+          weight_bump_up: r.weight_bump_up === true,
         };
         return {
           ...lite,

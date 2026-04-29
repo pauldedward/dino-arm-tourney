@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
   const measured = Number(measuredRaw);
   const file = form.get("file");
   const athleteFile = form.get("athlete_file");
+  // Optional non-para opt-in: when present, set/clear the persistent
+  // bump-up flag on the registration as part of the same write so the
+  // operator can change their mind at the scale.
+  const bumpRaw = form.get("weight_bump_up");
+  const weightBumpUp =
+    bumpRaw === null || bumpRaw === undefined
+      ? null
+      : String(bumpRaw) === "true" || String(bumpRaw) === "1";
 
   if (!registrationId) {
     return NextResponse.json({ error: "registration_id required" }, { status: 400 });
@@ -55,7 +63,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient();
   const { data: reg } = await svc
     .from("registrations")
-    .select("id, event_id, status, payments(status)")
+    .select("id, event_id, status, is_para, weight_bump_up, payments(status)")
     .eq("id", registrationId)
     .maybeSingle();
   if (!reg) {
@@ -126,6 +134,18 @@ export async function POST(req: NextRequest) {
       .eq("id", registrationId);
   }
 
+  // Persist the bump-up toggle if the operator changed it at the scale.
+  // No-op for para entries (silently ignored) and when the field wasn't
+  // submitted at all so older clients keep working unchanged.
+  let bumpChanged = false;
+  if (weightBumpUp !== null && !reg.is_para && weightBumpUp !== reg.weight_bump_up) {
+    await svc
+      .from("registrations")
+      .update({ weight_bump_up: weightBumpUp })
+      .eq("id", registrationId);
+    bumpChanged = true;
+  }
+
   // Status machine: only flip paid → weighed_in. "Paid" is computed from
   // payments.status (with a legacy fallback to registrations.status) so the
   // weigh-in flow no longer drifts when the bulk-row writer skipped one of
@@ -145,7 +165,11 @@ export async function POST(req: NextRequest) {
     action: "weighin.record",
     targetTable: "weigh_ins",
     targetId: inserted.id,
-    payload: { registration_id: registrationId, measured_kg: measured },
+    payload: {
+      registration_id: registrationId,
+      measured_kg: measured,
+      ...(bumpChanged ? { weight_bump_up: weightBumpUp } : {}),
+    },
   });
 
   return NextResponse.json({ ok: true, id: inserted.id });

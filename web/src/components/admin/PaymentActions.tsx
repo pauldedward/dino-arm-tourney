@@ -99,7 +99,7 @@ export default function PaymentActions({ paymentId, status, hasProof }: Props) {
           type="button"
           onClick={viewProof}
           disabled={!!busy}
-          className="border border-ink px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink hover:bg-kraft/30 disabled:opacity-40"
+          className="border border-ink px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-ink hover:bg-kraft/30 disabled:opacity-40"
         >
           {busy === "view" ? "…" : "View proof"}
         </button>
@@ -110,7 +110,7 @@ export default function PaymentActions({ paymentId, status, hasProof }: Props) {
             type="button"
             onClick={() => act("verify")}
             disabled={!!busy}
-            className="border border-moss bg-moss px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-white disabled:opacity-40"
+            className="border border-moss bg-moss px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-white disabled:opacity-40"
           >
             {busy === "verify" ? "…" : "Verify"}
           </button>
@@ -118,13 +118,13 @@ export default function PaymentActions({ paymentId, status, hasProof }: Props) {
             type="button"
             onClick={() => act("reject")}
             disabled={!!busy}
-            className="border border-rust px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-rust disabled:opacity-40"
+            className="border border-rust px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-rust disabled:opacity-40"
           >
             {busy === "reject" ? "…" : "Reject"}
           </button>
         </>
       )}
-      {err && <span className="font-mono text-[10px] text-rust">{err}</span>}
+      {err && <span className="font-mono text-[12px] text-rust">{err}</span>}
     </div>
   );
 }

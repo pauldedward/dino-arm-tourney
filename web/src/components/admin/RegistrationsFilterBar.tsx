@@ -38,7 +38,7 @@ export default function RegistrationsFilterBar({
       className="flex flex-wrap items-end gap-3 border-2 border-ink p-3"
     >
       <label className="block">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Search</span>
+        <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Search</span>
         <input
           value={form.q}
           onChange={(e) => setForm({ ...form, q: e.target.value })}
@@ -47,7 +47,7 @@ export default function RegistrationsFilterBar({
         />
       </label>
       <label className="block">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Division</span>
+        <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Division</span>
         <select
           value={form.division}
           onChange={(e) => {
@@ -65,7 +65,7 @@ export default function RegistrationsFilterBar({
         </select>
       </label>
       <label className="block">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em]">Status</span>
+        <span className="font-mono text-[12px] uppercase tracking-[0.2em]">Status</span>
         <select
           value={form.status}
           onChange={(e) => {
@@ -85,7 +85,7 @@ export default function RegistrationsFilterBar({
       </label>
       <button
         type="submit"
-        className="h-10 border-2 border-ink bg-ink px-4 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
+        className="h-10 border-2 border-ink bg-ink px-4 font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust"
       >
         Apply
       </button>
@@ -97,7 +97,7 @@ export default function RegistrationsFilterBar({
             setForm(clear);
             apply(clear);
           }}
-          className="h-10 border-2 border-ink/30 px-3 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+          className="h-10 border-2 border-ink/30 px-3 font-mono text-[12px] uppercase tracking-[0.2em] hover:border-ink"
         >
           Clear
         </button>

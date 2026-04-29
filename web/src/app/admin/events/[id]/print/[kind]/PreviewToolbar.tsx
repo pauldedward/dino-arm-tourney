@@ -46,7 +46,7 @@ export default function PreviewToolbar({
 
   return (
     <div className="sticky top-0 z-20 -mx-4 mb-4 border-b-2 border-ink bg-paper/95 px-4 py-3 backdrop-blur print:hidden">
-      <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[13px]">
         <input
           type="search"
           defaultValue={q}
@@ -82,7 +82,7 @@ export default function PreviewToolbar({
             ))}
           </select>
         )}
-        <span className="ml-auto text-[10px] uppercase tracking-[0.2em] text-ink/60">
+        <span className="ml-auto text-[12px] uppercase tracking-[0.2em] text-ink/60">
           {pending ? "filtering…" : totalLabel}
         </span>
         <button

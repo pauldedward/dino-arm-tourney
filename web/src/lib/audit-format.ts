@@ -63,7 +63,7 @@ const CATALOG: Record<string, ActionMeta> = {
     summarize: (r, t) => `Rejected ${describePayment(r, t)}.`,
   },
   "payment.collect": {
-    label: "Payment collected (offline)",
+    label: "Payment collected (at counter)",
     category: "payment",
     summarize: (r, t) => {
       const p = r.payload ?? {};

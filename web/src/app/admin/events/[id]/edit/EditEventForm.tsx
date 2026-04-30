@@ -79,7 +79,22 @@ async function uploadFile(
   fd.append("purpose", purpose);
   fd.append("event_id", eventId);
   const res = await fetch("/api/upload", { method: "POST", body: fd });
-  const json = await res.json();
+  // Vercel's platform 413 ("Request Entity Too Large") is plain text, not JSON,
+  // so don't blindly call res.json(). Read text first and parse defensively.
+  const raw = await res.text();
+  if (res.status === 413) {
+    throw new Error(
+      `${purpose} file is too large for the upload endpoint (max ~4.5 MB). Compress the image or PDF and try again.`
+    );
+  }
+  let json: { error?: string; kind?: "image" | "pdf"; publicUrl?: string } = {};
+  try {
+    json = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(
+      `${purpose} upload failed (HTTP ${res.status}): ${raw.slice(0, 200) || "no response body"}`
+    );
+  }
   if (!res.ok) throw new Error(json.error ?? `${purpose} upload failed`);
   return json as { kind: "image" | "pdf"; publicUrl: string };
 }

@@ -166,7 +166,7 @@ Same env vars (`web/.env.local` works). Set `NEXT_PUBLIC_APP_URL` to the tunnel 
 - [ ] Custom domain (defer until federation asks).
 - [ ] Sentry/log-drain (free tier exists; add when first prod incident wastes >1 hr debugging).
 - [x] CI test job on PRs — `.github/workflows/test.yml` runs `typecheck + test + build` on every PR touching `web/**` (added 2026-04-30).
-- [x] PR template + migrations log — `.github/pull_request_template.md` + `supabase/migrations/APPLIED-PROD.md` (added 2026-04-30). Branch `0001`–`0044` are the prod baseline; new work starts at `0045_*.sql`.
+- [x] PR template + folder-as-state migrations layout — `.github/pull_request_template.md` + `supabase/migrations/legacy/` for applied files, root for pending (added 2026-04-30). `0001`–`0044` are the prod baseline (in `legacy/`); new work goes in the root, then `git mv` into `legacy/` once applied to prod.
 - [x] Branch protection — see [docs/branch-protection.md](docs/branch-protection.md). Owner enables in GitHub UI (one-time).
 - [ ] Automated migration runner — `scripts/apply-migrations.mjs` exists as a `psql`-based one-shot wrapper (run with `--apply`). Move to a GitHub Action only once we have 2+ devs and a service-role connection string we're comfortable storing as a repo secret.
 - [ ] Razorpay live keys + webhook URL (only when we move off manual UPI).

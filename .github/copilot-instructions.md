@@ -83,6 +83,55 @@ first operation in that domain.
 
 ---
 
+## 4a. Branch & deploy workflow (PROD IS LIVE since 2026-04-30)
+
+`main` auto-deploys to Vercel production. **Never commit or push directly to `main`.**
+GitHub branch-protection ruleset `protect-main` enforces this — direct push is rejected
+with "Changes must be made through a pull request." Workflow source of truth:
+[PLAN-DEPLOY.md](../PLAN-DEPLOY.md) §4. Operator-facing recipe: [DEPLOY-GUIDE.md](../DEPLOY-GUIDE.md).
+
+**Mandatory loop for every change:**
+
+1. `git checkout main; git pull --ff-only`
+2. `git checkout -b feat/<topic>` (or `fix/`, `chore/`, `hotfix/<event-slug>`)
+3. Edit + `cd web; npm test` locally (red-green-refactor per `tdd` skill).
+4. `git push -u origin <branch>` → opens PR.
+5. CI (`.github/workflows/test.yml` → `typecheck + test + build`) must go green;
+   smoke-test the Vercel preview URL.
+6. **Merge via Squash or Rebase** (linear-history rule rejects merge commits).
+7. Delete the branch.
+
+**Migrations — folder location is the state.** See [supabase/migrations/README.md](../supabase/migrations/README.md).
+
+- `supabase/migrations/legacy/*.sql` = already applied to `dino-prod` and bundled
+  into `supabase/schema.sql`. Don't edit, don't re-apply, don't move out.
+- `supabase/migrations/*.sql` (root, NOT under `legacy/`) = **PENDING** = not yet on prod.
+- A clean repo has **zero pending files**. If you see one when you start, it means
+  the previous PR didn't finish its migration step — surface it before continuing.
+- New migrations:
+  1. Author at `supabase/migrations/<NNNN>_<topic>.sql` (next free number).
+  2. **Additive + idempotent**: `create … if not exists`, `add column if not exists`.
+     Never drop a column / table / function the previous deploy still reads. Two-phase
+     for breaking changes (PR A adds new shape + dual-write; PR B backfills + drops).
+  3. Apply to `dino-prod` *before* merging the PR — SQL Editor on the prod project, or
+     `node scripts/apply-migrations.mjs --target prod --file <NNNN>_x.sql --apply`
+     (needs `SUPABASE_DB_URL` env on prod).
+  4. In the same PR: `git mv supabase/migrations/<NNNN>_x.sql supabase/migrations/legacy/`
+     then `cd web; npm run schema:bundle` and commit the refreshed `supabase/schema.sql`.
+  5. Then merge.
+- A fresh prod DB is *always* reproducible from `supabase/schema.sql` + `supabase/seed.sql`
+  + applying any pending files (none in a clean state). The bundler reads `legacy/` only.
+
+**Environments stay isolated:** local dev uses `dino-dev` Supabase + `tournament-manager*`
+R2; production uses `dino-prod` Supabase + `tm-prod-*` R2. Seeders / `users:reset` /
+`drop-all-users.mjs` are dev-only and must never run against prod credentials.
+
+**Match-day freeze**: when the user says "freeze production" (typically T-2 days before
+an event), no merges to `main` until "unfreeze". Hot-fixes only via `hotfix/<slug>`
+branch → preview → manual promote ([PLAN-DEPLOY.md](../PLAN-DEPLOY.md) §5).
+
+---
+
 ## 5. Safety & quality gates
 
 - Follow the `tdd` red-green-refactor loop for behavior changes; don't ship code without

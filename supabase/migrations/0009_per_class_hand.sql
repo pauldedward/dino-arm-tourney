@@ -8,10 +8,12 @@ alter table registrations
   add column if not exists nonpara_hands text[];
 
 -- Backfill: existing rows get the same hand for every class they picked.
+-- (`array_fill` repeats the scalar nonpara_hand value into an N-length
+-- text[] aligned with nonpara_classes. Earlier draft used a correlated
+-- `array_agg` over generate_series, which modern Postgres rejects with
+-- "aggregate functions are not allowed in UPDATE".)
 update registrations
-   set nonpara_hands = (
-     select array_agg(nonpara_hand) from generate_series(1, coalesce(array_length(nonpara_classes, 1), 0))
-   )
+   set nonpara_hands = array_fill(nonpara_hand, ARRAY[array_length(nonpara_classes, 1)])
  where nonpara_hand is not null
    and nonpara_classes is not null
    and array_length(nonpara_classes, 1) > 0

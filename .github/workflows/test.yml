@@ -1,0 +1,63 @@
+name: web-ci
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/test.yml"
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        # --ignore-scripts skips native build steps. `canvas` (devDep, used only
+        # by the local Playwright readability-QA script) needs libcairo/libpango
+        # to build from source on Linux and would crash CI. Sharp ships
+        # prebuilt @img/sharp-linux-* binaries via optional deps, no scripts
+        # needed. Nothing under web/src imports canvas.
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (no env — only checks compile)
+        run: npm run build
+        env:
+          # Vercel injects real values in deploys; CI only needs build to compile.
+          NEXT_PUBLIC_SUPABASE_URL: "https://ci-placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder"
+          SUPABASE_SERVICE_ROLE_KEY: "ci-placeholder"
+          R2_ACCOUNT_ID: "ci"
+          R2_ACCESS_KEY_ID: "ci"
+          R2_SECRET_ACCESS_KEY: "ci"
+          R2_PUBLIC_BUCKET: "ci-public"
+          R2_PRIVATE_BUCKET: "ci-private"
+          R2_PUBLIC_BASE_URL: "https://ci.example"
+          NEXT_PUBLIC_APP_URL: "https://ci.example"
+          NEXT_PUBLIC_APP_ENV: "ci"

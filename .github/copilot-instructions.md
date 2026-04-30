@@ -83,6 +83,46 @@ first operation in that domain.
 
 ---
 
+## 4a. Branch & deploy workflow (PROD IS LIVE since 2026-04-30)
+
+`main` auto-deploys to Vercel production. **Never commit or push directly to `main`.**
+GitHub branch-protection ruleset `protect-main` enforces this — direct push is rejected
+with "Changes must be made through a pull request." Workflow source of truth:
+[PLAN-DEPLOY.md](../PLAN-DEPLOY.md) §4. Operator-facing recipe: [DEPLOY-GUIDE.md](../DEPLOY-GUIDE.md).
+
+**Mandatory loop for every change:**
+
+1. `git checkout main; git pull --ff-only`
+2. `git checkout -b feat/<topic>` (or `fix/`, `chore/`, `hotfix/<event-slug>`)
+3. Edit + `cd web; npm test` locally (red-green-refactor per `tdd` skill).
+4. `git push -u origin <branch>` → opens PR.
+5. CI (`.github/workflows/test.yml` → `typecheck + test + build`) must go green;
+   smoke-test the Vercel preview URL.
+6. **Merge via Squash or Rebase** (linear-history rule rejects merge commits).
+7. Delete the branch.
+
+**Migrations going forward — `0001`–`0044` are the prod baseline (frozen).**
+
+- New migrations start at **`0045_*.sql`** and must be **additive + idempotent**
+  (`create … if not exists`, `add column if not exists`).
+- **Never drop a column / table / function the previous deploy still reads.** Two-phase
+  for breaking changes: PR A adds new shape + dual-write; PR B (next deploy) backfills
+  + drops old shape.
+- Apply each new migration to **`dino-prod`** *before* merging the PR (SQL Editor or
+  `node scripts/apply-migrations.mjs --target prod --file 0045_x.sql --apply`).
+- In the **same PR**: append a line to [supabase/migrations/APPLIED-PROD.md](../supabase/migrations/APPLIED-PROD.md)
+  and re-run `npm run schema:bundle` (commit the refreshed `supabase/schema.sql`).
+
+**Environments stay isolated:** local dev uses `dino-dev` Supabase + `tournament-manager*`
+R2; production uses `dino-prod` Supabase + `tm-prod-*` R2. Seeders / `users:reset` /
+`drop-all-users.mjs` are dev-only and must never run against prod credentials.
+
+**Match-day freeze**: when the user says "freeze production" (typically T-2 days before
+an event), no merges to `main` until "unfreeze". Hot-fixes only via `hotfix/<slug>`
+branch → preview → manual promote ([PLAN-DEPLOY.md](../PLAN-DEPLOY.md) §5).
+
+---
+
 ## 5. Safety & quality gates
 
 - Follow the `tdd` red-green-refactor loop for behavior changes; don't ship code without

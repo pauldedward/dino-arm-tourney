@@ -8,6 +8,19 @@ export const dynamic = "force-dynamic";
 const ALLOWED_EMAIL = "edward2000ed@gmail.com";
 
 export async function POST(req: NextRequest) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("bootstrap-super-admin failed:", e);
+    return NextResponse.json(
+      { ok: false, error: `bootstrap failed: ${msg}` },
+      { status: 500 }
+    );
+  }
+}
+
+async function handle(req: NextRequest) {
   const { email, password, full_name } = (await req.json()) as {
     email?: string;
     password?: string;
@@ -33,6 +46,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Server is missing SUPABASE_SERVICE_ROLE_KEY. Set it in Vercel project env vars and redeploy.",
+      },
+      { status: 500 }
+    );
+  }
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Server is missing NEXT_PUBLIC_SUPABASE_URL. Set it in Vercel project env vars and redeploy.",
+      },
+      { status: 500 }
+    );
+  }
+
   const admin = createServiceClient();
 
   const { data: existing, error: existingErr } = await admin
@@ -46,32 +80,56 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-  // Allow re-bootstrap (password reset) only if the sole existing super_admin
-  // is the whitelisted email. Otherwise refuse.
+  // One-shot bootstrap. Once any super_admin exists, this endpoint is
+  // permanently disabled — even for the whitelisted email — because it is
+  // unauthenticated and would otherwise be a public account-takeover vector.
+  // Forgotten password? Use Supabase's password reset email flow instead.
   if (existing && existing.length > 0) {
-    const onlyOwner =
-      existing.length === 1 &&
-      (existing[0].email ?? "").toLowerCase() === ALLOWED_EMAIL;
-    if (!onlyOwner) {
-      return NextResponse.json(
-        { ok: false, error: "Super admin already exists." },
-        { status: 409 }
-      );
-    }
+    return NextResponse.json(
+      { ok: false, error: "Super admin already exists." },
+      { status: 409 }
+    );
   }
 
   let userId: string | null = null;
-  const { data: list } = await admin.auth.admin.listUsers();
-  const found = list?.users.find(
-    (u) => (u.email ?? "").toLowerCase() === ALLOWED_EMAIL
-  );
-  if (found) {
-    userId = found.id;
-    await admin.auth.admin.updateUserById(found.id, {
+  // Page through auth users to find the owner email (listUsers default perPage is 50).
+  let page = 1;
+  const perPage = 200;
+  // Hard cap to avoid runaway loops; 50k users covered.
+  for (let i = 0; i < 250; i++) {
+    const { data: list, error: listErr } = await admin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+    if (listErr) {
+      return NextResponse.json(
+        { ok: false, error: `listUsers failed: ${listErr.message}` },
+        { status: 500 }
+      );
+    }
+    const found = list?.users.find(
+      (u) => (u.email ?? "").toLowerCase() === ALLOWED_EMAIL
+    );
+    if (found) {
+      userId = found.id;
+      break;
+    }
+    if (!list || list.users.length < perPage) break;
+    page += 1;
+  }
+
+  if (userId) {
+    const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
       password,
       email_confirm: true,
       user_metadata: { full_name: full_name ?? "Super Admin" },
     });
+    if (updErr) {
+      return NextResponse.json(
+        { ok: false, error: `updateUser failed: ${updErr.message}` },
+        { status: 500 }
+      );
+    }
   } else {
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: ALLOWED_EMAIL,

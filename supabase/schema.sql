@@ -3,16 +3,18 @@
 -- GENERATED FILE — do not edit by hand. Regenerate with:
 --   npm run schema:bundle    (from web/)
 --
--- Source: supabase/migrations/*.sql (46 files)
--- Generated: 2026-04-30T09:14:39.206Z
+-- Source: supabase/migrations/legacy/*.sql (46 files)
+-- Generated: 2026-04-30T11:53:07.900Z
 --
 -- Apply to a fresh Supabase project by pasting this whole file into the
--- SQL Editor (Supabase Dashboard → SQL Editor → New query → Run).
+-- SQL Editor (Supabase Dashboard → SQL Editor → New query → Run), then
+-- paste supabase/seed.sql, then any PENDING files at supabase/migrations/
+-- (anything NOT under legacy/).
 -- Idempotent: safe to re-run on a partially-applied DB.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0001_init.sql
+-- legacy/0001_init.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Dino Arm Tourney — schema v1 (M0)
@@ -191,7 +193,7 @@ create policy "registrations_self_insert" on registrations
 -- Organisers: TODO in M1 (org-membership table + policies for events draft + registrations admin).
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0002_hubs_eventlog.sql
+-- legacy/0002_hubs_eventlog.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Dino Arm Tourney — schema v2: edge-plane (hubs, tables, categories, event_log)
@@ -335,7 +337,7 @@ create policy "category_assignments_public_read" on category_assignments for sel
 -- Insert-only via service role (the venue sync server / cloud bridge).
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0003_week1.sql
+-- legacy/0003_week1.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Dino Arm Tourney — schema v3 (Week 1 production cut)
@@ -608,7 +610,7 @@ create policy "athletes_super_all" on athletes for all
   using (role_at_least('super_admin')) with check (role_at_least('super_admin'));
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0004_event_poster.sql
+-- legacy/0004_event_poster.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Dino Arm Tourney — 0004: event poster (image or PDF)
@@ -624,7 +626,7 @@ alter table events
     check (poster_kind in ('image','pdf'));
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0005_audit_log_event_set_null.sql
+-- legacy/0005_audit_log_event_set_null.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- Ensure deleting an event does not fail because of audit_log FK.
 -- Replace the existing FK (which may have been created without ON DELETE SET NULL
@@ -638,7 +640,7 @@ alter table audit_log
   foreign key (event_id) references events(id) on delete set null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0006_athlete_registration_auth.sql
+-- legacy/0006_athlete_registration_auth.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0006_athlete_registration_auth
@@ -703,7 +705,7 @@ create policy "payments_self_read" on payments for select
   );
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0007_role_simplification.sql
+-- legacy/0007_role_simplification.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0007_role_simplification
@@ -742,7 +744,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0008_registration_v2.sql
+-- legacy/0008_registration_v2.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0008 — Registration model v2
 -- Decouple gender from participation track. An athlete now records a
@@ -784,7 +786,7 @@ alter table registrations
   alter column division drop not null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0009_per_class_hand.sql
+-- legacy/0009_per_class_hand.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0009 — Per-class non-para hand selection.
 -- An athlete can now compete in different hands across age categories
@@ -808,7 +810,7 @@ update registrations
    and nonpara_hands is null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0010_drop_registrations_para_class_check.sql
+-- legacy/0010_drop_registrations_para_class_check.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0010 — Drop legacy check constraint on registrations.para_class
 --
@@ -826,7 +828,7 @@ alter table registrations
   drop constraint if exists registrations_para_class_check;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0011_registration_public_token.sql
+-- legacy/0011_registration_public_token.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0011 — Public, unguessable token for registration confirmation URLs.
 --
@@ -860,7 +862,7 @@ create unique index if not exists registrations_public_token_idx
   on registrations(public_token);
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0012_payment_proofs.sql
+-- legacy/0012_payment_proofs.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0012_payment_proofs.sql
 --
@@ -894,7 +896,7 @@ where utr is not null
   );
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0013_realtime.sql
+-- legacy/0013_realtime.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0013 — Enable Supabase Realtime on the tables the UI needs to live-update.
 -- Keep this list minimal so the websocket payload stays small. If you add
@@ -923,7 +925,7 @@ begin
 end$$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0014_event_circular.sql
+-- legacy/0014_event_circular.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Dino Arm Tourney — 0014: event circular (PDF flyer for download)
@@ -939,7 +941,7 @@ alter table events
   add column if not exists circular_url text;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0015_aadhaar_full.sql
+-- legacy/0015_aadhaar_full.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0015_aadhaar_full.sql
 -- Store the full Aadhaar number alongside the masked form so operator
@@ -977,7 +979,7 @@ begin
 end$$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0016_registrations_perf_indexes.sql
+-- legacy/0016_registrations_perf_indexes.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0016_registrations_perf_indexes.sql
 -- Speed up the bulk-register "recent saves" sidebar and the operator
@@ -1002,7 +1004,7 @@ create index if not exists payments_registration_id_idx
   on payments (registration_id);
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0017_event_summary_perf.sql
+-- legacy/0017_event_summary_perf.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0017_event_summary_perf.sql
 -- Collapse the /admin/events/[id] dashboard's 3 parallel COUNT(*) queries
@@ -1033,7 +1035,7 @@ revoke all on function public.event_dashboard_counts(uuid) from public;
 grant execute on function public.event_dashboard_counts(uuid) to authenticated, service_role;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0018_payment_mode.sql
+-- legacy/0018_payment_mode.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0018_payment_mode.sql
 --
@@ -1105,7 +1107,7 @@ create index if not exists registrations_event_district_idx
   on registrations (event_id, district);
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0019_event_dashboard_rpc.sql
+-- legacy/0019_event_dashboard_rpc.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0019_event_dashboard_rpc.sql
 -- Single-RTT dashboard fetch for /admin/events/[id]. Returns event row +
@@ -1180,7 +1182,7 @@ revoke all on function public.event_dashboard(text) from public;
 grant execute on function public.event_dashboard(text) to authenticated, service_role;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0020_backfill_offline_payment_method.sql
+-- legacy/0020_backfill_offline_payment_method.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0020_backfill_offline_payment_method.sql
 --
@@ -1207,7 +1209,7 @@ update payments p
    and p.method = 'manual_upi';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0021_rebrand_iaff_to_pafi.sql
+-- legacy/0021_rebrand_iaff_to_pafi.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- Rebrand affiliation copy on existing event rows from IAFF
 -- (Indian Armwrestling Federation) to PAFI (People's Arm Wrestling
@@ -1234,7 +1236,7 @@ set
 where code = 'IAFF-2024';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0022_double_elim_brackets.sql
+-- legacy/0022_double_elim_brackets.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0022 — first-class double-elimination support on fixtures.
 --
@@ -1325,7 +1327,7 @@ begin
 end $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0022_id_card_text_sizes.sql
+-- legacy/0022_id_card_text_sizes.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0022_id_card_text_sizes.sql
 -- Adds optional override font sizes (in PDF points) for ID-card org name &
@@ -1352,7 +1354,7 @@ alter table public.events
         or (id_card_event_title_size between 6 and 16));
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0023_event_bracket_format.sql
+-- legacy/0023_event_bracket_format.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0023 — bracket_format actually lives on `events`.
 --
@@ -1382,7 +1384,7 @@ end $$;
 update events set bracket_format = 'double_elim' where bracket_format is null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0024_fixtures_best_of.sql
+-- legacy/0024_fixtures_best_of.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0024_fixtures_best_of.sql
 -- Add per-fixture `best_of` count so the bracket builder can mark the
@@ -1400,7 +1402,7 @@ alter table fixtures
 update fixtures set best_of = 3 where bracket_side = 'GF' and best_of <> 3;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0024_payment_installments.sql
+-- legacy/0024_payment_installments.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0024_payment_installments.sql
 --
@@ -1461,7 +1463,7 @@ where p.status = 'verified'
   );
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0025_assign_chest_no_trigger.sql
+-- legacy/0025_assign_chest_no_trigger.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0025_assign_chest_no_trigger.sql
 -- Auto-assign chest_no per event on registration insert.
@@ -1522,7 +1524,7 @@ update registrations r
  where r.id = ranked.id;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0026_district_team_chest_blocks.sql
+-- legacy/0026_district_team_chest_blocks.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0026_district_team_chest_blocks.sql
 -- District/team-aware chest number allocator.
@@ -1678,7 +1680,7 @@ begin
 end $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0027_payment_collections_payer_label.sql
+-- legacy/0027_payment_collections_payer_label.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- Distinguish "athlete paid for themselves" from "district / team / sponsor
 -- treasurer handed over a pooled amount that covered some athletes". The
@@ -1694,7 +1696,7 @@ create index if not exists payment_collections_payer_label_idx
   where payer_label is not null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0028_payment_summary_view.sql
+-- legacy/0028_payment_summary_view.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0028_payment_summary_view.sql
 --
@@ -1865,7 +1867,7 @@ revoke all on function public.event_dashboard(text) from public;
 grant execute on function public.event_dashboard(text) to authenticated, service_role;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0029_registration_checkin_status.sql
+-- legacy/0029_registration_checkin_status.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0029_registration_checkin_status.sql
 --
@@ -1927,7 +1929,7 @@ comment on column registrations.checkin_status is
   'legacy mirror for backward compatibility.';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0030_fixture_runtime.sql
+-- legacy/0030_fixture_runtime.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0030_fixture_runtime.sql
 -- Live match-day runtime columns on `fixtures` + atomic auto-advance RPC.
@@ -2239,7 +2241,7 @@ grant execute on function apply_fixture_complete(uuid, char, int, int, text, uui
 grant execute on function fill_next_slot(uuid, int, uuid, uuid, timestamptz) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0031_fixture_runtime_lockdown.sql
+-- legacy/0031_fixture_runtime_lockdown.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0031_fixture_runtime_lockdown.sql
 -- The two RPCs added in 0030 are only ever invoked from server routes
@@ -2251,7 +2253,7 @@ revoke execute on function apply_fixture_complete(uuid, char, int, int, text, uu
 revoke execute on function fill_next_slot(uuid, int, uuid, uuid, timestamptz) from anon, authenticated, public;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0032_category_table_no.sql
+-- legacy/0032_category_table_no.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0032_category_table_no.sql
 -- A category is run on exactly one physical table at the venue. Track that
@@ -2265,7 +2267,7 @@ create index if not exists categories_event_table_idx
   on categories(event_id, table_no);
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0033_fixture_runtime_fix.sql
+-- legacy/0033_fixture_runtime_fix.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0033_fixture_runtime_fix.sql
 -- Bug fix for 0030: `apply_fixture_complete` declared OUT columns named
@@ -2405,7 +2407,7 @@ revoke execute on function apply_fixture_complete(uuid, char, int, int, text, uu
   from anon, authenticated, public;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0034_fill_next_slot_fix.sql
+-- legacy/0034_fill_next_slot_fix.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0034_fill_next_slot_fix.sql
 -- Bug: in the losers bracket, the slot at L.r.m has TWO feeders — one
@@ -2521,7 +2523,7 @@ revoke execute on function fill_next_slot(uuid, int, uuid, uuid, timestamptz)
   from anon, authenticated, public;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0035_fill_next_slot_chain.sql
+-- legacy/0035_fill_next_slot_chain.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0035_fill_next_slot_chain.sql
 -- Bug: fill_next_slot's auto-walkover branch (other side null AND no
@@ -2647,7 +2649,7 @@ revoke execute on function fill_next_slot(uuid, int, uuid, uuid, timestamptz)
   from anon, authenticated, public;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0036_offline_entry_fee_and_channel.sql
+-- legacy/0036_offline_entry_fee_and_channel.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0036_offline_entry_fee_and_channel.sql
 --
@@ -2693,7 +2695,7 @@ update public.registrations
    and submitted_by = 'self';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0037_payment_summary_waivers.sql
+-- legacy/0037_payment_summary_waivers.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0037_payment_summary_waivers.sql
 --
@@ -2909,7 +2911,7 @@ revoke all on function public.event_dashboard(text) from public;
 grant execute on function public.event_dashboard(text) to authenticated, service_role;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0038_weight_bump_up.sql
+-- legacy/0038_weight_bump_up.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0038_weight_bump_up.sql
 --
@@ -2932,7 +2934,7 @@ comment on column public.registrations.weight_bump_up is
   'Non-para opt-in: place this athlete one weight bucket above the one their weight resolves to. No-op for para entries and at the open bucket.';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0039_registration_status_split.sql
+-- legacy/0039_registration_status_split.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0039_registration_status_split.sql
 --
@@ -3009,7 +3011,7 @@ comment on column registrations.status is
   'rendering until the column is dropped in a future migration.';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0040_weight_overrides.sql
+-- legacy/0040_weight_overrides.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0040_weight_overrides.sql
 --
@@ -3108,7 +3110,7 @@ comment on column public.registrations.weight_overrides is
   'Per-entry operator picks: array of {scope,code,hand,bucket_code}. Resolver applies an override only if it points to a HEAVIER bucket than the auto one; lighter picks are ignored.';
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0041_chest_blocks_start_1000.sql
+-- legacy/0041_chest_blocks_start_1000.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0041_chest_blocks_start_1000.sql
 -- Shift the chest-number starting base from 100 to 1000.
@@ -3237,7 +3239,7 @@ begin
 end $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0042_profile_erased_at.sql
+-- legacy/0042_profile_erased_at.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0042_profile_erased_at.sql
 --
@@ -3265,7 +3267,7 @@ create index if not exists profiles_active_idx
   where disabled_at is null and erased_at is null;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0043_user_hard_delete.sql
+-- legacy/0043_user_hard_delete.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0043_user_hard_delete.sql
 --
@@ -3359,7 +3361,7 @@ alter table profiles
 commit;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 0044_para_entry_fee.sql
+-- legacy/0044_para_entry_fee.sql
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0044_para_entry_fee.sql
 --

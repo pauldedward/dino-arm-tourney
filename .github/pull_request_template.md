@@ -20,11 +20,14 @@ URL as the smoke-test surface; do not merge red.
 
 ### If this PR adds a `supabase/migrations/*.sql`
 
+Folder location = state (see [supabase/migrations/README.md](../supabase/migrations/README.md)).
+
 - [ ] Migration is **additive + idempotent** (`if not exists`, `if exists`).
 - [ ] No column / table / function the previous deploy still reads is dropped in this PR (two-phase rollout — see `PLAN-DEPLOY.md` §4).
-- [ ] Migration was applied to **`dino-prod`** (SQL Editor or `supabase db push`) **before** merging this PR.
-- [ ] `supabase/migrations/APPLIED-PROD.md` updated with date + filename.
+- [ ] Migration was applied to **`dino-prod`** (SQL Editor or `node scripts/apply-migrations.mjs --target prod --file <NNNN>_x.sql --apply`) **before** merging this PR.
+- [ ] File has been moved into `supabase/migrations/legacy/` in this PR (`git mv`).
 - [ ] `npm run schema:bundle` re-run and the refreshed `supabase/schema.sql` is committed.
+- [ ] `supabase/migrations/` (root, excluding `legacy/`) is empty — no leftover pending files.
 
 ### If a match-day freeze is active
 

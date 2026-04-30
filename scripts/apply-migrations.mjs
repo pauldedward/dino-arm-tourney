@@ -1,23 +1,25 @@
 #!/usr/bin/env node
-// Apply pending Supabase migrations to a target project.
+// Apply PENDING Supabase migrations to a target project.
+//
+// PENDING = files at supabase/migrations/*.sql that are NOT under legacy/.
+// Anything under supabase/migrations/legacy/ is already on prod and bundled
+// into supabase/schema.sql — this script will not touch them.
+// See supabase/migrations/README.md for the convention.
 //
 // Usage (PowerShell):
 //   $env:SUPABASE_DB_URL = "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"
 //   node scripts/apply-migrations.mjs --target prod --file 0045_xxx.sql
-//   node scripts/apply-migrations.mjs --target prod --all-after 0044
+//   node scripts/apply-migrations.mjs --target prod --all-pending
 //
-// Requires the Supabase CLI (`npm i -g supabase`) OR `psql` on PATH.
-// We shell out to `psql` because it's a single binary, no project link needed.
+// Requires `psql` on PATH (`winget install PostgreSQL.PostgreSQL` or any
+// libpq install).
 //
 // Safety:
 //   * Refuses to run unless --target is given (forces you to think about WHERE).
 //   * Dry-runs by default; pass --apply to actually execute.
 //   * Wraps each file in a transaction (psql -1) so partial failure rolls back.
-//   * After success, prints the line you should append to
-//     supabase/migrations/APPLIED-PROD.md.
-//
-// Does NOT update APPLIED-PROD.md automatically — that line is part of
-// the PR diff so reviewers see it.
+//   * After success, reminds you to `git mv` the file into legacy/ and re-run
+//     `npm run schema:bundle` in the same PR.
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, existsSync, statSync } from "node:fs";
@@ -34,7 +36,7 @@ function parseArgs(argv) {
     if (a === "--apply") out.apply = true;
     else if (a === "--target") out.target = argv[++i];
     else if (a === "--file") out.file = argv[++i];
-    else if (a === "--all-after") out.allAfter = argv[++i];
+    else if (a === "--all-pending") out.allPending = true;
     else {
       console.error(`Unknown arg: ${a}`);
       process.exit(2);
@@ -43,9 +45,11 @@ function parseArgs(argv) {
   return out;
 }
 
-function listMigrations() {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => /^\d{4}_.+\.sql$/.test(f))
+function listPending() {
+  // Top-level *.sql only; ignore legacy/ subfolder.
+  return readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((d) => d.isFile() && /^\d{4}_.+\.sql$/.test(d.name))
+    .map((d) => d.name)
     .sort();
 }
 
@@ -53,16 +57,14 @@ function pickFiles(args) {
   if (args.file) {
     const p = join(MIGRATIONS_DIR, args.file);
     if (!existsSync(p)) {
-      console.error(`File not found: ${p}`);
+      console.error(`File not found in pending set: ${p}`);
+      console.error("Hint: a file already moved into legacy/ has already been applied.");
       process.exit(2);
     }
     return [args.file];
   }
-  if (args.allAfter) {
-    const cutoff = String(args.allAfter).padStart(4, "0");
-    return listMigrations().filter((f) => f.slice(0, 4) > cutoff);
-  }
-  console.error("Provide --file <name.sql> or --all-after <NNNN>");
+  if (args.allPending) return listPending();
+  console.error("Provide --file <name.sql> or --all-pending");
   process.exit(2);
 }
 
@@ -81,12 +83,12 @@ function main() {
 
   const files = pickFiles(args);
   if (!files.length) {
-    console.log("No migrations to apply.");
+    console.log("No pending migrations to apply.");
     return;
   }
 
   console.log(`Target: ${args.target}`);
-  console.log(`Files (${files.length}):`);
+  console.log(`Pending files (${files.length}):`);
   for (const f of files) console.log(`  - ${f}`);
 
   if (!args.apply) {
@@ -106,9 +108,10 @@ function main() {
       console.error(`FAILED on ${f} (exit ${res.status}). Aborting.`);
       process.exit(res.status ?? 1);
     }
-    const today = new Date().toISOString().slice(0, 10);
     console.log(
-      `OK. Append to supabase/migrations/APPLIED-PROD.md:\n  ${f} — ${today} — applied by <you> via cli`,
+      `OK. In your PR, move it into legacy/ and re-bundle:\n` +
+        `  git mv supabase/migrations/${f} supabase/migrations/legacy/${f}\n` +
+        `  cd web && npm run schema:bundle && git add ../supabase/schema.sql`,
     );
   }
 }

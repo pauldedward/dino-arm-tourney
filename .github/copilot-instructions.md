@@ -101,17 +101,26 @@ with "Changes must be made through a pull request." Workflow source of truth:
 6. **Merge via Squash or Rebase** (linear-history rule rejects merge commits).
 7. Delete the branch.
 
-**Migrations going forward — `0001`–`0044` are the prod baseline (frozen).**
+**Migrations — folder location is the state.** See [supabase/migrations/README.md](../supabase/migrations/README.md).
 
-- New migrations start at **`0045_*.sql`** and must be **additive + idempotent**
-  (`create … if not exists`, `add column if not exists`).
-- **Never drop a column / table / function the previous deploy still reads.** Two-phase
-  for breaking changes: PR A adds new shape + dual-write; PR B (next deploy) backfills
-  + drops old shape.
-- Apply each new migration to **`dino-prod`** *before* merging the PR (SQL Editor or
-  `node scripts/apply-migrations.mjs --target prod --file 0045_x.sql --apply`).
-- In the **same PR**: append a line to [supabase/migrations/APPLIED-PROD.md](../supabase/migrations/APPLIED-PROD.md)
-  and re-run `npm run schema:bundle` (commit the refreshed `supabase/schema.sql`).
+- `supabase/migrations/legacy/*.sql` = already applied to `dino-prod` and bundled
+  into `supabase/schema.sql`. Don't edit, don't re-apply, don't move out.
+- `supabase/migrations/*.sql` (root, NOT under `legacy/`) = **PENDING** = not yet on prod.
+- A clean repo has **zero pending files**. If you see one when you start, it means
+  the previous PR didn't finish its migration step — surface it before continuing.
+- New migrations:
+  1. Author at `supabase/migrations/<NNNN>_<topic>.sql` (next free number).
+  2. **Additive + idempotent**: `create … if not exists`, `add column if not exists`.
+     Never drop a column / table / function the previous deploy still reads. Two-phase
+     for breaking changes (PR A adds new shape + dual-write; PR B backfills + drops).
+  3. Apply to `dino-prod` *before* merging the PR — SQL Editor on the prod project, or
+     `node scripts/apply-migrations.mjs --target prod --file <NNNN>_x.sql --apply`
+     (needs `SUPABASE_DB_URL` env on prod).
+  4. In the same PR: `git mv supabase/migrations/<NNNN>_x.sql supabase/migrations/legacy/`
+     then `cd web; npm run schema:bundle` and commit the refreshed `supabase/schema.sql`.
+  5. Then merge.
+- A fresh prod DB is *always* reproducible from `supabase/schema.sql` + `supabase/seed.sql`
+  + applying any pending files (none in a clean state). The bundler reads `legacy/` only.
 
 **Environments stay isolated:** local dev uses `dino-dev` Supabase + `tournament-manager*`
 R2; production uses `dino-prod` Supabase + `tm-prod-*` R2. Seeders / `users:reset` /

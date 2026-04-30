@@ -4,14 +4,21 @@ Two-bucket layout — **folder location is the state**.
 
 ```
 supabase/migrations/
-├── legacy/           ← already applied to dino-prod AND bundled into ../schema.sql
-│   ├── 0001_init.sql
-│   ├── …
-│   └── 0044_para_entry_fee.sql
-├── README.md         ← (this file)
-└── 0045_*.sql        ← PENDING: not yet applied to dino-prod
-    0046_*.sql
+├── legacy/                       ← already applied to dino-prod AND bundled into ../schema.sql
+├── archive-pre-2026-04-30/       ← old per-PR migrations, superseded by the 2026-04-30 baseline.
+│                                   For history only — DO NOT re-run on any DB.
+├── README.md                     ← (this file)
+└── 0046_*.sql                    ← PENDING: not yet applied to dino-prod
 ```
+
+> **2026-04-30 baseline rebuild.** Prod schema had drifted from the
+> `legacy/*.sql` bundle (commit `a544cab` accidentally stripped lines from
+> `0003_week1.sql`). The fix was to **introspect dev (`hmvnelyzqqdfidjalsha`) via
+> Supabase MCP and rewrite `../schema.sql` directly from that snapshot.** All
+> historical migration files (0001…0044) were moved to
+> `archive-pre-2026-04-30/` so future operators don't try to replay them on top
+> of the new baseline. `legacy/` is now empty and is the place where future
+> applied migrations land (per the workflow below).
 
 ## What goes where
 

@@ -23,7 +23,16 @@
 -- is unchanged — a fully-waived payment is still "verified" from
 -- the registration's point of view, just with received_inr = 0.
 
-create or replace view payment_summary as
+-- CREATE OR REPLACE VIEW can only append columns, not insert them in the
+-- middle of the column list. We're inserting received_inr / waived_inr
+-- between collected_inr and remaining_inr, so drop and recreate. CASCADE
+-- because event_payment_totals + event_district_payment_totals depend on
+-- it; both are recreated below.
+drop view if exists event_district_payment_totals;
+drop view if exists event_payment_totals;
+drop view if exists payment_summary;
+
+create view payment_summary as
   select p.id                                                     as payment_id,
          p.registration_id,
          r.event_id,

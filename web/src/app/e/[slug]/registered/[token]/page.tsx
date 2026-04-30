@@ -95,7 +95,11 @@ export default async function RegisteredPage({
       .select("full_name")
       .eq("id", weighIn.weighed_by)
       .maybeSingle();
-    weigherName = prof?.full_name ?? null;
+    weigherName = prof?.full_name ?? "Deleted user";
+  } else if (weighIn?.weighed_at) {
+    // Weigh-in happened but the operator who performed it has been deleted
+    // (FK SET NULL). Show a stable placeholder.
+    weigherName = "Deleted user";
   }
 
   // Compute eligibility: which categories the athlete actually qualifies

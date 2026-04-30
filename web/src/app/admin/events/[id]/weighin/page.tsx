@@ -24,13 +24,13 @@ export default async function WeighInQueuePage({
   const svc = createServiceClient();
 
   // resolveEventRef gave us name+status; only the registrations rows
-  // need a round-trip now. Payment is NOT a prerequisite for weigh-in:
-  // we surface unpaid athletes too so floor staff can capture weight,
-  // and the row badge calls out the missing payment.
+  // need a round-trip now. Payment is intentionally NOT joined here —
+  // it's settled on a different surface and would only slow this query
+  // and clutter the floor-staff view.
   const { data: rows, error } = await svc
     .from("registrations")
     .select(
-      "id, event_id, chest_no, full_name, initial, division, district, declared_weight_kg, weight_class_code, status, lifecycle_status, discipline_status, checkin_status, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, weigh_ins(id, measured_kg, weighed_at), payments(id, status, amount_inr)"
+      "id, event_id, chest_no, full_name, initial, dob, district, declared_weight_kg, weight_class_code, status, lifecycle_status, discipline_status, checkin_status, gender, nonpara_classes, nonpara_hands, nonpara_hand, para_codes, para_hand, weight_overrides, weigh_ins(id, measured_kg, weighed_at)"
     )
     .eq("event_id", eventId)
     // Lifecycle / discipline gate — only competing athletes belong in
@@ -51,9 +51,8 @@ export default async function WeighInQueuePage({
           Weigh-in queue
         </h1>
         <p className="mt-2 font-mono text-[13px] text-ink/60">
-          Weigh-in is open to every registered athlete — payment can be
-          settled later. Rows with unverified payment are flagged so you
-          can chase the dues, but their weight is still captured.
+          Capture the weight inline — type the kilos and hit save. Use
+          the photo capture page only when proof images are needed.
         </p>
         <PendingLink
           href={`/admin/events/${eventSlug}`}

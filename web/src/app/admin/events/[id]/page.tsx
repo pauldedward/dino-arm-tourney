@@ -41,7 +41,8 @@ export default async function EventDetail({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("operator", "/admin/events");
+  const session = await requireRole("operator", "/admin/events");
+  const isSuper = session.role === "super_admin";
   const { id: idOrSlug } = await params;
   const svc = createServiceClient();
 
@@ -127,12 +128,17 @@ export default async function EventDetail({
         />
       </div>
 
-      <PublishControls
-        eventId={event.id}
-        status={event.status}
-        registrationPublishedAt={event.registration_published_at}
-        registrationClosedAt={event.registration_closed_at}
-      />
+      {/* Lifecycle actions (publish / open / close registrations,
+          archive) are super-admin-only — operators run match-day but
+          can't reshape the event itself. */}
+      {isSuper && (
+        <PublishControls
+          eventId={event.id}
+          status={event.status}
+          registrationPublishedAt={event.registration_published_at}
+          registrationClosedAt={event.registration_closed_at}
+        />
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <QuickLink
@@ -149,7 +155,9 @@ export default async function EventDetail({
         <QuickLink href={`/admin/events/${event.slug}/print`} title="Print & Fixtures" desc="Nominal, category, ID cards. Generate brackets, print fixtures." />
         <QuickLink href={`/admin/events/${event.slug}/run`} title="Run fixtures" desc="Match-day console. Mark winners, auto-advance brackets." />
         <QuickLink href={`/admin/events/${event.slug}/standings`} title="Standings" desc="Medals by category, district medal table." />
-        <QuickLink href={`/admin/events/${event.slug}/edit`} title="Edit event" desc="Branding, payment, poster, circular, operators." />
+        {isSuper && (
+          <QuickLink href={`/admin/events/${event.slug}/edit`} title="Edit event" desc="Branding, payment, poster, circular, operators." />
+        )}
         <QuickLink href={`/e/${event.slug}/register`} title="Public form" desc="Open the registration form in a new tab." external />
         <QuickLink href={`/e/${event.slug}/live`} title="Live (public)" desc="Spectator scoreboard for this event." external />
       </div>

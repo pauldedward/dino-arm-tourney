@@ -55,7 +55,10 @@ export async function GET(
       .select("full_name")
       .eq("id", payment.verified_by)
       .maybeSingle();
-    verifierName = prof?.full_name ?? null;
+    verifierName = prof?.full_name ?? "Deleted user";
+  } else if (payment?.verified_at) {
+    // Payment was verified but the verifier has been deleted (FK SET NULL).
+    verifierName = "Deleted user";
   }
 
   const doc = (

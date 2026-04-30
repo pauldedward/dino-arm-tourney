@@ -22,6 +22,7 @@ const PATCHABLE = new Set([
   // Payment
   "entry_fee_default_inr",
   "entry_fee_offline_inr",
+  "entry_fee_para_inr",
   "upi_id",
   "upi_payee_name",
   "payment_mode",
@@ -61,8 +62,9 @@ export async function PATCH(
   for (const [k, v] of Object.entries(body)) {
     if (!PATCHABLE.has(k)) continue;
     // Coerce empty/invalid offline-fee inputs to null so the form's blank
-    // input means "no override" and not "₹0".
-    if (k === "entry_fee_offline_inr") {
+    // input means "no override" and not "₹0". Same rule for the Para
+    // override added in 0044.
+    if (k === "entry_fee_offline_inr" || k === "entry_fee_para_inr") {
       if (v === "" || v == null) {
         patch[k] = null;
         continue;
@@ -70,7 +72,7 @@ export async function PATCH(
       const n = typeof v === "number" ? v : Number(v);
       if (!Number.isFinite(n) || n < 0) {
         return NextResponse.json(
-          { error: "entry_fee_offline_inr must be a non-negative integer or blank" },
+          { error: `${k} must be a non-negative integer or blank` },
           { status: 400 }
         );
       }

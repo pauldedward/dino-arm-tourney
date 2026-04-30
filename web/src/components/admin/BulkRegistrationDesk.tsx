@@ -204,6 +204,7 @@ export default function BulkRegistrationDesk({
   eventStartsAt,
   defaultFee,
   offlineFee,
+  paraFee,
   paymentMode = "online_upi",
   districts,
   initialSaved,
@@ -215,6 +216,11 @@ export default function BulkRegistrationDesk({
   defaultFee: number;
   /** Per-hand fee for offline registrations. Falls back to defaultFee. */
   offlineFee?: number;
+  /** Per-hand fee for offline Para entries. Falls back to offlineFee
+   *  (then defaultFee). Only applied when draft.mode === "para" AND
+   *  channel === "offline" — the public form has no class info, so
+   *  Para discounts can only be honoured at the desk. */
+  paraFee?: number;
   paymentMode?: "online_upi" | "offline" | "hybrid";
   districts: readonly string[];
   initialSaved: SavedRow[];
@@ -226,6 +232,7 @@ export default function BulkRegistrationDesk({
   // can flip to manual_upi per row.
   const defaultMethod: "manual_upi" | "cash" = "cash";
   const effectiveOfflineFee = offlineFee ?? defaultFee;
+  const effectiveParaFee = paraFee ?? effectiveOfflineFee;
   const [draft, setDraft] = useState<Draft>(() =>
     emptyDraft(effectiveOfflineFee, defaultMethod, "offline")
   );
@@ -610,7 +617,14 @@ export default function BulkRegistrationDesk({
 
   // Suggested total = entries × per-hand fee for the selected channel.
   // Online and offline registrations may use different per-hand rates.
-  const perHandFee = draft.channel === "online" ? defaultFee : effectiveOfflineFee;
+  // Para entries get a third tier (only offline) so federations can
+  // honour their Para discount automatically.
+  const perHandFee =
+    draft.channel === "online"
+      ? defaultFee
+      : draft.mode === "para"
+      ? effectiveParaFee
+      : effectiveOfflineFee;
   const suggestedTotal = Math.max(entryCount, 1) * perHandFee;
   // Currently-loaded sidebar row (when in edit mode). Source of payment
   // metadata — payment_id, payment_status — that the draft itself
@@ -1229,6 +1243,12 @@ export default function BulkRegistrationDesk({
       photo_key: draft.photo_key ?? undefined,
       paid_amount_inr: Number(draft.paid_amount_inr) || 0,
       total_fee_inr: totalFee,
+      // Implicit waiver = anything the operator lopped off the suggested
+      // total. Sent to the backend so it can record a `waiver`-method
+      // collection row, otherwise the gap silently disappears from
+      // payment reports (the operator sees "Waived ₹X" in the UI but
+      // the totals never reflect it).
+      waived_amount_inr: waivedFee,
       payment_status: derivedPaymentStatus,
       payment_method: draft.payment_method,
       payment_utr: draft.payment_method === "manual_upi" ? draft.payment_utr.trim() || undefined : undefined,
@@ -2777,30 +2797,25 @@ function CheckinRailPill({ row }: { row: SavedRow }) {
 
 /**
  * Tiny per-row payment action cluster: a Collect ₹X button (when there
- * is a remainder to collect) plus a ⋯ menu for Adjust total / Undo
- * collection. Mirrors the FastRegistrationsTable affordances so an
- * operator never has to switch screens for routine payment edits made
- * within the row's first minute on the wire.
- *
- * The ⋯ menu uses a native <details> so we don't have to manage open
- * state per row — clicking another summary collapses the previous one
- * via the click-outside listener installed below.
+ * is a remainder to collect). Adjust total / Undo collection are
+ * intentionally *not* exposed here — operators use the row's Edit
+ * button to fix totals or reverse collections, which keeps the action
+ * surface minimal and avoids a second kebab menu next to the edit
+ * affordance.
  */
 function RowPaymentActions({
   row,
   onCollect,
-  onAdjust,
-  onUndo,
 }: {
   row: SavedRow;
   onCollect: (t: CollectTarget) => void;
-  onAdjust: (t: {
+  onAdjust?: (t: {
     paymentId: string;
     currentTotal: number;
     collected: number;
     label: string;
   }) => void;
-  onUndo: (t: { paymentId: string; collected: number; label: string }) => void;
+  onUndo?: (t: { paymentId: string; collected: number; label: string }) => void;
 }) {
   const paymentId = row.payment_id;
   if (!paymentId) return null;
@@ -2829,46 +2844,6 @@ function RowPaymentActions({
           ₹{remaining.toLocaleString("en-IN")}
         </button>
       )}
-      <details className="relative">
-        <summary
-          className="cursor-pointer list-none border-2 border-ink/40 px-2 py-1 font-mono text-[12px] font-bold uppercase tracking-[0.15em] text-ink/70 marker:hidden hover:border-ink hover:text-ink [&::-webkit-details-marker]:hidden"
-          title="More payment actions"
-        >
-          ⋯
-        </summary>
-        <div className="absolute right-0 top-full z-30 mt-1 w-44 border-2 border-ink bg-bone shadow-[4px_4px_0_0_rgba(10,27,20,0.85)]">
-          <button
-            type="button"
-            onClick={(e) => {
-              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
-                "open",
-              );
-              onAdjust({
-                paymentId,
-                currentTotal: total,
-                collected,
-                label,
-              });
-            }}
-            className="block w-full px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.15em] text-ink hover:bg-kraft/30"
-          >
-            Adjust total
-          </button>
-          <button
-            type="button"
-            disabled={collected === 0}
-            onClick={(e) => {
-              (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
-                "open",
-              );
-              onUndo({ paymentId, collected, label });
-            }}
-            className="block w-full px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.15em] text-ink hover:bg-kraft/30 disabled:cursor-not-allowed disabled:text-ink/30 disabled:hover:bg-transparent"
-          >
-            Undo collection
-          </button>
-        </div>
-      </details>
     </div>
   );
 }

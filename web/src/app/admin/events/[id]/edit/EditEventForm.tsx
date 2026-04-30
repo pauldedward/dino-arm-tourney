@@ -210,6 +210,12 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
   const [offlineFee, setOfflineFee] = useState(
     event.entry_fee_offline_inr == null ? "" : String(event.entry_fee_offline_inr)
   );
+  // Optional Para-only override. Para fees are nearly always lower than
+  // the standard offline fee. Empty string = no override (fall through
+  // to offline, then default).
+  const [paraFee, setParaFee] = useState(
+    event.entry_fee_para_inr == null ? "" : String(event.entry_fee_para_inr)
+  );
   const [upiId, setUpiId] = useState(event.upi_id ?? "");
   const [upiPayee, setUpiPayee] = useState(event.upi_payee_name ?? "");
   const [busy, setBusy] = useState(false);
@@ -225,6 +231,8 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
         entry_fee_default_inr: Number(fee) || 0,
         entry_fee_offline_inr:
           offlineFee.trim() === "" ? null : Number(offlineFee) || 0,
+        entry_fee_para_inr:
+          paraFee.trim() === "" ? null : Number(paraFee) || 0,
         upi_id: mode === "offline" ? null : upiId || null,
         upi_payee_name: mode === "offline" ? null : upiPayee || null,
       });
@@ -284,6 +292,23 @@ function PaymentSection({ event, onSaved }: { event: EventRow; onSaved: () => vo
             onChange={(e) => setOfflineFee(e.target.value)}
             className="input"
             placeholder={`Same as online (₹${Number(fee) || 0})`}
+          />
+        </Field>
+      )}
+      {mode !== "online_upi" && (
+        <Field
+          label="Para entry fee per hand (₹)"
+          hint="Charged for Para entries at the counter desk. Leave blank to use the offline fee (then the online fee)."
+        >
+          <input
+            type="number"
+            min={0}
+            value={paraFee}
+            onChange={(e) => setParaFee(e.target.value)}
+            className="input"
+            placeholder={`Same as offline (₹${
+              offlineFee.trim() === "" ? Number(fee) || 0 : Number(offlineFee) || 0
+            })`}
           />
         </Field>
       )}

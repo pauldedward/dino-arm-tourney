@@ -51,6 +51,11 @@ interface BulkRowBody {
   paid_amount_inr?: number;
   /** Total fee owed (entries × per-hand fee). Falls back to event default. */
   total_fee_inr?: number;
+  /** Implicit waiver: amount the operator lopped off the suggested total
+   *  (e.g. 500 suggested → operator sets total to 200, waived = 300).
+   *  Recorded as a `waiver`-method collection row so payment reports
+   *  surface it. Ignored when payment_method is already 'waiver'. */
+  waived_amount_inr?: number;
   payment_status?: "pending" | "verified";
   payment_method?: "manual_upi" | "cash" | "waiver";
   payment_utr?: string;
@@ -105,7 +110,7 @@ export async function POST(req: Request) {
   const svc = createServiceClient();
   const { data: event } = await svc
     .from("events")
-    .select("id, slug, starts_at, entry_fee_default_inr, entry_fee_offline_inr, status, payment_mode")
+    .select("id, slug, starts_at, entry_fee_default_inr, entry_fee_offline_inr, entry_fee_para_inr, status, payment_mode")
     .eq("id", body.event_id)
     .maybeSingle();
   if (!event) {
@@ -310,7 +315,7 @@ export async function POST(req: Request) {
     Math.round(
       typeof body.total_fee_inr === "number" && Number.isFinite(body.total_fee_inr)
         ? body.total_fee_inr
-        : feeFor(channel, event)
+        : feeFor(channel, event, { isPara: para.length > 0 })
     )
   );
   const collectedAmount = Math.max(
@@ -318,16 +323,30 @@ export async function POST(req: Request) {
     Math.round(body.paid_amount_inr ?? 0)
   );
   const isWaiver = paymentMethod === "waiver";
+  // Implicit waiver = operator lowered the suggested total. Only meaningful
+  // for non-waiver methods; the explicit-waiver flow already covers the
+  // whole total. Stored as a separate `waiver`-method collection row so
+  // the payment report can attribute the discount.
+  const implicitWaiver =
+    !isWaiver && typeof body.waived_amount_inr === "number"
+      ? Math.max(0, Math.round(body.waived_amount_inr))
+      : 0;
   const collectedEffective = isWaiver ? totalFee : Math.min(collectedAmount, totalFee);
+  // The fee actually owed is what the operator set as Total PLUS the
+  // implicit waiver — so payments.amount_inr reflects the original
+  // billable and (collected + waived) closes the bill.
+  const billedAmount = totalFee + implicitWaiver;
   const paymentStatus =
-    (wantsVerifiedPayment || isWaiver || (totalFee > 0 && collectedEffective >= totalFee))
+    (wantsVerifiedPayment ||
+      isWaiver ||
+      (billedAmount > 0 && collectedEffective + implicitWaiver >= billedAmount))
       ? "verified"
       : "pending";
 
   const nowIso = new Date().toISOString();
   const paymentRow: Record<string, unknown> = {
     registration_id: inserted.id,
-    amount_inr: totalFee,
+    amount_inr: billedAmount,
     method: paymentMethod,
     status: paymentStatus,
     utr: paymentMethod === "manual_upi" ? body.payment_utr?.trim() || null : null,
@@ -356,6 +375,18 @@ export async function POST(req: Request) {
       amount_inr: collectedEffective,
       method: paymentMethod,
       reference: body.payment_utr?.trim() || null,
+      collected_by: session.userId,
+      collected_at: nowIso,
+    });
+  }
+  // Implicit waiver collection — attributes the gap so the Payment
+  // Report's Waived column matches what the operator saw on screen.
+  if (payment && implicitWaiver > 0) {
+    await svc.from("payment_collections").insert({
+      payment_id: payment.id,
+      amount_inr: implicitWaiver,
+      method: "waiver",
+      reference: "discount applied at registration",
       collected_by: session.userId,
       collected_at: nowIso,
     });
@@ -410,6 +441,8 @@ export async function POST(req: Request) {
       payment_method: paymentMethod,
       total_fee_inr: totalFee,
       collected_inr: collectedEffective,
+      waived_inr: implicitWaiver,
+      billed_inr: billedAmount,
       channel,
       weight_overrides_count: sanitizeOverrides(body.weight_overrides).length,
       weighed_in: !!weighInId,

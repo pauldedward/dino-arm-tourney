@@ -9,6 +9,7 @@ import {
   loadIdCards,
   type SheetFilters,
 } from "@/lib/sheets/loaders";
+import { buildPaymentReportWorkbook } from "@/lib/sheets/payment-report-xlsx";
 import { exportFilename } from "@/lib/export/filename";
 import {
   formatCategoryCode,
@@ -100,9 +101,16 @@ function isKind(k: string): k is Kind {
 }
 
 /* ------------------------------------------------------------------ */
-/*                       Payment report worksheet                     */
+/*                       Payment report workbook                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Three-sheet workbook (Summary + Districts + Athletes) wired together
+ * with formulas via `buildPaymentReportWorkbook`. Edits the operator
+ * makes in the file (Total / Received / Waived) propagate through Paid
+ * and Due on the Athletes sheet, then up to Districts (SUMIF) and
+ * Summary (SUM) automatically.
+ */
 async function buildPaymentReport(
   wb: ExcelJS.Workbook,
   svc: ReturnType<typeof createServiceClient>,
@@ -111,131 +119,7 @@ async function buildPaymentReport(
   filters: SheetFilters
 ) {
   const { rows, totals } = await loadPaymentReport(svc, eventId, filters);
-  const ws = wb.addWorksheet("Payment Report", {
-    views: [{ state: "frozen", ySplit: 5 }],
-    properties: { defaultRowHeight: 18 },
-  });
-  // 10 cols: Chest, Athlete, Team, Category, Total, Received, Waived,
-  // Paid (received+waived), Due, Paid by.
-  ws.columns = [
-    { width: 14 },
-    { width: 28 },
-    { width: 22 },
-    { width: 26 },
-    { width: 12 },
-    { width: 12 },
-    { width: 12 },
-    { width: 12 },
-    { width: 12 },
-    { width: 18 },
-  ];
-  const COL_COUNT = 10;
-
-  ws.mergeCells("A1:J1");
-  const title = ws.getCell("A1");
-  title.value = `${eventName} — Payment Report`;
-  title.font = { name: "Calibri", size: 18, bold: true, color: { argb: "FF1F4E78" } };
-  title.alignment = { horizontal: "center", vertical: "middle" };
-  ws.getRow(1).height = 28;
-
-  setPair(ws, 2, "A", "Total Athletes", totals.total_athletes);
-  setPair(ws, 2, "C", "Total Billable", totals.total_billable);
-  setPair(ws, 2, "E", "Total Waived", totals.total_waived);
-  setPair(ws, 2, "G", "Waived athletes", totals.waived_n);
-  setPair(ws, 2, "I", "Effective Total", totals.total_effective);
-  setPair(ws, 3, "A", "Total Received", totals.total_received);
-  setPair(ws, 3, "C", "Total Due", totals.total_due);
-  setPair(ws, 3, "E", "% Collected", `${round2(totals.percent_paid)}%`);
-  setPair(
-    ws,
-    3,
-    "G",
-    "Avg Received",
-    totals.total_athletes ? round2(totals.total_received / totals.total_athletes) : 0
-  );
-  setPair(
-    ws,
-    3,
-    "I",
-    "Avg Due",
-    totals.total_athletes ? round2(totals.total_due / totals.total_athletes) : 0
-  );
-  styleSummaryRow(ws.getRow(2), { italic: false }, COL_COUNT);
-  styleSummaryRow(ws.getRow(3), { italic: true }, COL_COUNT);
-
-  for (let c = 1; c <= COL_COUNT; c++) {
-    ws.getCell(4, c).border = {
-      top: { style: "dashed", color: { argb: "FF92D050" } },
-    };
-  }
-  ws.getRow(4).height = 6;
-
-  const headerRow = ws.getRow(5);
-  [
-    "Chest Number",
-    "Athlete",
-    "Team / District",
-    "Category",
-    "Total ₹",
-    "Received ₹",
-    "Waived ₹",
-    "Paid ₹",
-    "Due ₹",
-    "Paid by",
-  ].forEach((h, i) => {
-    const cell = headerRow.getCell(i + 1);
-    cell.value = h;
-    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF4B0082" },
-    };
-    cell.alignment = { horizontal: "left", vertical: "middle" };
-    cell.border = thinBorder("FF000000");
-  });
-  headerRow.height = 22;
-
-  let rowIdx = 6;
-  for (const r of rows) {
-    const row = ws.getRow(rowIdx);
-    row.values = [
-      r.chest_no ?? "",
-      r.full_name ?? "",
-      r.team_or_district ?? "",
-      r.category,
-      r.total_inr,
-      r.received_inr,
-      r.waived_inr,
-      r.paid_inr,
-      r.due_inr,
-      r.paid_by ?? "",
-    ];
-    for (let c = 1; c <= COL_COUNT; c++) {
-      const cell = row.getCell(c);
-      cell.border = thinBorder("FFBFBFBF");
-      cell.alignment = { vertical: "middle" };
-      if (c >= 5 && c <= 9) cell.numFmt = "#,##0";
-    }
-    rowIdx++;
-  }
-
-  const totalRow = ws.getRow(rowIdx);
-  totalRow.getCell(4).value = "GRAND TOTAL";
-  totalRow.getCell(5).value = totals.total_billable;
-  totalRow.getCell(6).value = totals.total_received;
-  totalRow.getCell(7).value = totals.total_waived;
-  totalRow.getCell(8).value = totals.total_paid;
-  totalRow.getCell(9).value = totals.total_due;
-  for (let c = 1; c <= COL_COUNT; c++) {
-    const cell = totalRow.getCell(c);
-    cell.font = { bold: true };
-    cell.border = thinBorder("FF000000");
-    if (c >= 5 && c <= 9) cell.numFmt = "#,##0";
-  }
-  totalRow.getCell(4).alignment = { horizontal: "right" };
-
-  ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: COL_COUNT } };
+  buildPaymentReportWorkbook({ wb, eventName, rows, totals });
 }
 
 /* ------------------------------------------------------------------ */
@@ -597,36 +481,6 @@ async function buildIdCards(
 /*                              helpers                               */
 /* ------------------------------------------------------------------ */
 
-function setPair(
-  ws: ExcelJS.Worksheet,
-  row: number,
-  labelCol: string,
-  label: string,
-  value: string | number
-) {
-  const labelCell = ws.getCell(`${labelCol}${row}`);
-  labelCell.value = label;
-  labelCell.font = { bold: true };
-  const valCol = String.fromCharCode(labelCol.charCodeAt(0) + 1);
-  ws.getCell(`${valCol}${row}`).value = value;
-}
-
-function styleSummaryRow(
-  row: ExcelJS.Row,
-  opts: { italic: boolean },
-  colCount = 6,
-) {
-  for (let c = 1; c <= colCount; c++) {
-    const cell = row.getCell(c);
-    if (opts.italic) {
-      const f = cell.font ?? {};
-      cell.font = { ...f, italic: true };
-    }
-    cell.alignment = { vertical: "middle", horizontal: "left" };
-  }
-  row.height = 20;
-}
-
 function thinBorder(argb: string): Partial<ExcelJS.Borders> {
   const side = { style: "thin" as const, color: { argb } };
   return { top: side, left: side, bottom: side, right: side };
@@ -640,8 +494,4 @@ function tintBoolean(cell: ExcelJS.Cell, ok: boolean) {
   };
   cell.alignment = { horizontal: "center", vertical: "middle" };
   cell.font = { bold: ok };
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }

@@ -1,18 +1,18 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import PendingLink from "@/components/PendingLink";
-import { isPaid } from "@/lib/payments/status";
-import type { WeightOverride } from "@/lib/rules/resolve";
+import ClassesCell from "@/components/admin/ClassesCell";
 import { buildOverrideRows } from "@/lib/rules/weight-overrides";
+import type { WeightOverride } from "@/lib/rules/resolve";
 
 export type WeighInRow = {
   id: string;
   chest_no: number | null;
   full_name: string | null;
   initial: string | null;
-  division: string | null;
+  dob: string | null;
   district: string | null;
   declared_weight_kg: number | null;
   weight_class_code: string | null;
@@ -30,9 +30,6 @@ export type WeighInRow = {
   weigh_ins:
     | { id: string; measured_kg: number | null; weighed_at: string | null }[]
     | null;
-  payments:
-    | { id: string; status: string | null; amount_inr: number | null }[]
-    | null;
 };
 
 interface Props {
@@ -41,43 +38,15 @@ interface Props {
 }
 
 /**
- * Compose a comma-separated label of resolved weight buckets for a row.
- * Returns null when the row has no entries (e.g. mid-edit), so the caller
- * can fall back to the legacy `weight_class_code` column.
- */
-function resolvedClassLabel(r: WeighInRow): string | null {
-  const wt = Number(r.declared_weight_kg);
-  if (!Number.isFinite(wt) || wt <= 0) return null;
-  const rows = buildOverrideRows(
-    {
-      gender: (r.gender as "M" | "F" | null) ?? null,
-      nonpara_classes: r.nonpara_classes ?? [],
-      nonpara_hands:
-        (r.nonpara_hands && r.nonpara_hands.length > 0
-          ? r.nonpara_hands
-          : (r.nonpara_classes ?? []).map(() => r.nonpara_hand ?? null)) ?? [],
-      para_codes: r.para_codes ?? [],
-      para_hand: r.para_hand ?? null,
-      weight_overrides: r.weight_overrides ?? [],
-    },
-    wt
-  );
-  if (rows.length === 0) return null;
-  const seen = new Set<string>();
-  const parts: string[] = [];
-  for (const row of rows) {
-    const key = `${row.scope}|${row.code}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    parts.push(row.selectedBucket.label + (row.competingUp ? " ↑" : ""));
-  }
-  return parts.join(", ");
-}
-
-/**
  * Fast weigh-in queue: client-side instant search across name / chest_no /
- * district, j/k keyboard navigation, Enter → capture page, auto-refresh on
- * focus + every 20s. Pending rows pinned above completed rows.
+ * district, j/k keyboard navigation, Enter → focus the row's inline
+ * weight input, auto-refresh on focus + every 60s. Pending rows pinned
+ * above completed rows.
+ *
+ * The primary action is now an inline weight + Save button on every row
+ * so floor staff can rip through the queue without leaving the table.
+ * The full photo-capture flow stays available as a secondary "Photo →"
+ * link for athletes who need scale-proof imagery.
  */
 export default function WeighInQueue({ rows, eventSlug }: Props) {
   const [q, setQ] = useState("");
@@ -95,7 +64,7 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
         r.initial ?? "",
         String(r.chest_no ?? ""),
         r.district ?? "",
-        r.division ?? "",
+        r.dob ?? "",
         r.weight_class_code ?? "",
       ];
       return fields.some((f) => f.toLowerCase().includes(lower));
@@ -113,7 +82,6 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
     return { pending: p, done: d, noShow: ns };
   }, [rows, q]);
 
-  // Combined nav order: pending first, then done, then no-show.
   const navOrder = useMemo(
     () => [...pending, ...done, ...noShow],
     [pending, done, noShow]
@@ -126,10 +94,6 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
   // Periodic revalidation of underlying server data without a full nav.
   useEffect(() => {
     function refresh() {
-      // soft-refresh: re-request the page so RSC re-renders rows.
-      // We rely on Next's router.refresh() via a global listener if mounted.
-      // For simplicity force a same-URL reload in the background only when
-      // the user is idle (no input focused).
       const inField =
         document.activeElement &&
         ["INPUT", "TEXTAREA", "SELECT"].includes(
@@ -175,12 +139,15 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
       }
       if (e.key === "Enter") {
         const r = navOrder[cursor];
-        if (r) location.href = `/admin/events/${eventSlug}/weighin/${r.id}`;
+        if (r) {
+          const el = document.getElementById(`weighin-kg-${r.id}`);
+          (el as HTMLInputElement | null)?.focus();
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navOrder, cursor, eventSlug]);
+  }, [navOrder, cursor]);
 
   return (
     <div className="space-y-6">
@@ -210,7 +177,7 @@ export default function WeighInQueue({ rows, eventSlug }: Props) {
         <p className="ml-auto font-mono text-[12px] text-ink/50">
           <kbd className="border border-ink/40 px-1">/</kbd> search ·{" "}
           <kbd className="border border-ink/40 px-1">j/k</kbd> move ·{" "}
-          <kbd className="border border-ink/40 px-1">Enter</kbd> capture
+          <kbd className="border border-ink/40 px-1">Enter</kbd> focus weight
         </p>
       </div>
 
@@ -279,14 +246,11 @@ function Section({
   open: boolean;
   onToggle: () => void;
 }) {
-  // Per-section pagination — keeps the DOM lean for events with hundreds
-  // of pending rows. Hidden until > 25 rows so small events stay flat.
   const PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
   const [pageSize, setPageSize] = useState<number>(50);
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  // Reset to page 1 when row set shrinks (filter typed).
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
@@ -310,89 +274,102 @@ function Section({
       </button>
       {open && (
         <div className="overflow-x-auto border-2 border-ink">
-        <table className="w-full text-sm">
-          <thead className="border-b-2 border-ink bg-kraft/20 text-left font-mono text-[12px] uppercase tracking-[0.2em]">
-            <tr>
-              <th className="px-3 py-3">#</th>
-              <th className="px-3 py-3">Name</th>
-              <th className="px-3 py-3">Division</th>
-              <th className="px-3 py-3">District</th>
-              <th className="px-3 py-3">Payment</th>
-              <th className="px-3 py-3 text-right">Declared</th>
-              <th className="px-3 py-3 text-right">
-                {state === "done" ? "Measured" : "Class"}
-              </th>
-              <th className="px-3 py-3 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((r, i) => {
-              const wi = r.weigh_ins?.[0];
-              const realIndex = (safePage - 1) * pageSize + i;
-              const isCur = offset + realIndex === cursor;
-              const pay = paymentSummary(r);
-              return (
-                <tr
-                  key={r.id}
-                  onMouseEnter={() => onHover(offset + realIndex)}
-                  className={`border-b border-ink/10 last:border-b-0 ${
-                    isCur ? "bg-kraft/40" : "hover:bg-kraft/10"
-                  }`}
-                >
-                  <td className="px-3 py-2 font-mono tabular-nums text-ink/60">
-                    {r.chest_no ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 font-semibold">
-                    {r.initial ? `${r.initial}. ` : ""}
-                    {r.full_name ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-[13px]">
-                    {r.division ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-[13px] text-ink/70">
-                    {r.district ?? "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-block border px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-[0.15em] ${pay.cls}`}
-                    >
-                      {pay.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
-                    {r.declared_weight_kg ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
-                    {state === "done"
-                      ? wi?.measured_kg ?? "—"
-                      : resolvedClassLabel(r) ?? r.weight_class_code ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <PendingLink
-                      href={`/admin/events/${eventSlug}/weighin/${r.id}`}
-                      prefetch
-                      pendingLabel="Loading…"
-                      className="border border-ink px-2 py-1 font-mono text-[12px] uppercase tracking-[0.2em] hover:bg-ink hover:text-bone"
-                    >
-                      {state === "done" ? "Re-weigh" : "Capture →"}
-                    </PendingLink>
+          <table className="w-full text-sm">
+            <thead className="border-b-2 border-ink bg-kraft/20 text-left font-mono text-[12px] uppercase tracking-[0.2em]">
+              <tr>
+                <th className="px-3 py-3">Chest</th>
+                <th className="px-3 py-3">Athlete</th>
+                <th className="px-3 py-3">Date of birth</th>
+                <th className="px-3 py-3">District</th>
+                <th className="px-3 py-3 text-right">Declared kg</th>
+                <th className="px-3 py-3">Division & class</th>
+                <th className="px-3 py-3">
+                  {state === "done" ? "Measured kg" : "Record weight"}
+                </th>
+                <th className="px-3 py-3 text-right">Proof photo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((r, i) => {
+                const wi = r.weigh_ins?.[0];
+                const realIndex = (safePage - 1) * pageSize + i;
+                const isCur = offset + realIndex === cursor;
+                return (
+                  <tr
+                    key={r.id}
+                    onMouseEnter={() => onHover(offset + realIndex)}
+                    className={`border-b border-ink/10 last:border-b-0 ${
+                      isCur ? "bg-kraft/40" : "hover:bg-kraft/10"
+                    }`}
+                  >
+                    <td className="px-3 py-2 align-top font-mono tabular-nums text-ink/60">
+                      {r.chest_no ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 align-top font-semibold">
+                      {r.initial ? `${r.initial}. ` : ""}
+                      {r.full_name ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 align-top font-mono tabular-nums text-[13px]">
+                      {formatDob(r.dob)}
+                    </td>
+                    <td className="px-3 py-2 align-top font-mono text-[13px] text-ink/70">
+                      {r.district ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 align-top text-right font-mono tabular-nums">
+                      {r.declared_weight_kg ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      {/*
+                        Once a measured weight exists, show the resolved
+                        bucket against the actual scale reading — that
+                        is the bracket the athlete will compete in. The
+                        declared kg is only a fallback for pending rows.
+                      */}
+                      <ClassesCell
+                        row={{
+                          ...r,
+                          declared_weight_kg:
+                            wi?.measured_kg ?? r.declared_weight_kg,
+                        }}
+                      />
+                      {bucketChanged(r, wi?.measured_kg ?? null) && (
+                        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-rust">
+                          bracket changed · measured {wi!.measured_kg} kg · was
+                          declared {r.declared_weight_kg} kg
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <QuickWeighIn row={r} measured={wi?.measured_kg ?? null} />
+                    </td>
+                    <td className="px-3 py-2 align-top text-right">
+                      <PendingLink
+                        href={`/admin/events/${eventSlug}/weighin/${r.id}`}
+                        prefetch
+                        pendingLabel="…"
+                        className="border border-ink/40 px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] hover:border-ink hover:bg-ink hover:text-bone"
+                      >
+                        Photo →
+                      </PendingLink>
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-3 py-6 text-center font-mono text-[13px] text-ink/50"
+                  >
+                    {state === "pending"
+                      ? "Nothing pending."
+                      : "No captures yet."}
                   </td>
                 </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-3 py-6 text-center font-mono text-[13px] text-ink/50"
-                >
-                  {state === "pending" ? "Nothing pending." : "No captures yet."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
       {open && showPager && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink bg-bone px-3 py-2 font-mono text-[13px]">
@@ -470,29 +447,188 @@ function Section({
   );
 }
 
-function paymentSummary(r: WeighInRow): { label: string; cls: string } {
-  // Single source of truth: isPaid() collapses payments[].status === 'verified'
-  // and the legacy registrations.status flags into one answer so the operator
-  // never sees a row that disagrees with the rest of the console.
-  const ps = Array.isArray(r.payments) ? r.payments : [];
-  const rejected = ps.some((p) => p?.status === "rejected");
-  if (isPaid(r.status, ps)) {
-    return { label: "Paid", cls: "border-moss/60 bg-moss/10 text-moss" };
-  }
-  if (rejected) {
-    return {
-      label: "Rejected",
-      cls: "border-rust/60 bg-rust/10 text-rust",
-    };
-  }
-  if (ps.length > 0) {
-    return {
-      label: "Pending",
-      cls: "border-rust/60 bg-rust/10 text-rust",
-    };
-  }
-  return {
-    label: "Unpaid",
-    cls: "border-rust/60 bg-rust/10 text-rust",
+/**
+ * Format an ISO `YYYY-MM-DD` date of birth as `DD Mon YYYY` (e.g.
+ * `12 Mar 2001`) so floor staff cannot confuse the day with the
+ * month. Falls back to the raw string when parsing fails so we
+ * never silently lose information.
+ */
+function formatDob(iso: string | null): string {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const idx = Number(mo) - 1;
+  if (idx < 0 || idx > 11) return iso;
+  return `${d} ${months[idx]} ${y}`;
+}
+
+/**
+ * True when the resolved weight bucket(s) for at least one entry on
+ * this registration differ between the declared weight and the
+ * measured weight. Drives the red "bracket changed" hint so floor
+ * staff only get a warning when the change matters competitively —
+ * a 78.4 → 78.6 reading inside the same bucket stays quiet.
+ */
+function bucketChanged(r: WeighInRow, measured: number | null): boolean {
+  if (measured == null) return false;
+  const declared = r.declared_weight_kg;
+  if (declared == null) return false;
+  if (Number(measured) === Number(declared)) return false;
+  const regForResolve = {
+    gender: r.gender ?? null,
+    nonpara_classes: r.nonpara_classes ?? [],
+    nonpara_hands: (r.nonpara_hands ?? []) as Array<"R" | "L" | "B" | null>,
+    para_codes: r.para_codes ?? [],
+    para_hand: r.para_hand ?? null,
+    weight_overrides: r.weight_overrides ?? [],
   };
+  const declaredRows = buildOverrideRows(regForResolve, Number(declared));
+  const measuredRows = buildOverrideRows(regForResolve, Number(measured));
+  const key = (b: { scope: string; code: string; selectedBucket: { code: string } }) =>
+    `${b.scope}|${b.code}|${b.selectedBucket.code}`;
+  const declaredKeys = declaredRows.map(key).sort().join(",");
+  const measuredKeys = measuredRows.map(key).sort().join(",");
+  return declaredKeys !== measuredKeys;
+}
+
+/**
+ * Inline weight input + Save button. Posts straight to /api/weighin
+ * with no photos and refreshes the row in place. Empty submission is
+ * blocked; the input keeps focus on error so the operator can correct
+ * a typo and re-submit without touching the mouse.
+ *
+ * For already-weighed rows, shows the captured weight with a "Re-weigh"
+ * affordance that swaps the input back in without leaving the page.
+ */
+function QuickWeighIn({
+  row,
+  measured,
+}: {
+  row: WeighInRow;
+  measured: number | null;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [kg, setKg] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    setErr(null);
+    const parsed = Number(kg);
+    if (!Number.isFinite(parsed) || parsed < 20 || parsed > 250) {
+      setErr("20–250 kg");
+      inputRef.current?.focus();
+      return;
+    }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("registration_id", row.id);
+      fd.set("measured_kg", parsed.toFixed(2));
+      const res = await fetch("/api/weighin", { method: "POST", body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(j.error ?? `failed (${res.status})`);
+        setBusy(false);
+        inputRef.current?.focus();
+        return;
+      }
+      setBusy(false);
+      setKg("");
+      setEditing(false);
+      setSavedFlash(true);
+      router.refresh();
+    } catch (e2) {
+      setBusy(false);
+      setErr((e2 as Error).message ?? "network");
+      inputRef.current?.focus();
+    }
+  }
+
+  // Already weighed and not currently editing → show the value + re-weigh.
+  if (measured != null && !editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-base font-bold tabular-nums">
+          {measured} kg
+        </span>
+        {savedFlash && (
+          <span className="font-mono text-[11px] text-moss">saved</span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(true);
+            setSavedFlash(false);
+            setTimeout(() => inputRef.current?.focus(), 0);
+          }}
+          className="border border-ink/30 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:border-ink"
+        >
+          Re-weigh
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="flex items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        ref={inputRef}
+        id={`weighin-kg-${row.id}`}
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        min={20}
+        max={250}
+        value={kg}
+        onChange={(e) => {
+          setKg(e.target.value);
+          if (err) setErr(null);
+        }}
+        placeholder={
+          row.declared_weight_kg != null ? String(row.declared_weight_kg) : "kg"
+        }
+        disabled={busy}
+        className="w-20 border-2 border-ink bg-bone px-2 py-1 font-mono text-base font-bold tabular-nums disabled:opacity-50"
+      />
+      <button
+        type="submit"
+        disabled={busy || !kg}
+        className="border-2 border-ink bg-ink px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-bone hover:bg-rust hover:border-rust disabled:opacity-30"
+      >
+        {busy ? "…" : "Save"}
+      </button>
+      {editing && (
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setKg("");
+            setErr(null);
+          }}
+          className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink/60 hover:text-ink"
+        >
+          cancel
+        </button>
+      )}
+      {err && (
+        <span className="font-mono text-[11px] text-rust" role="alert">
+          {err}
+        </span>
+      )}
+    </form>
+  );
 }

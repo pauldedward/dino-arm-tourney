@@ -55,7 +55,7 @@ const SHEETS: Sheet[] = [
     kind: "payment-report",
     title: "Payment Report",
     blurb:
-      "Totals, paid vs due, GRAND TOTAL — both PDF and styled XLSX from the same data.",
+      "Accounting view — district summary + per-athlete totals, paid vs due. PDF for sharing; smart XLSX with live formulas (edit a cell, the totals and % collected recompute).",
     hasPdf: true,
     hasXlsx: true,
   },
@@ -68,9 +68,9 @@ const SHEETS: Sheet[] = [
   },
   {
     kind: "cash-sheet",
-    title: "Cash Collection (per district)",
+    title: "Cash Collection Forms",
     blurb:
-      "One sheet per district with athlete + fee + signature column. Hand to the District Convener for offline events.",
+      "Field-work paper — one A4 per district with athlete + fee + blank signature column. Hand to the District Convener to tick off and sign as they collect cash, then reconcile back into the Payment Report.",
     hasPdf: true,
     hasXlsx: false,
   },
@@ -86,7 +86,8 @@ export default async function PrintPage({
   if (!ref) redirect("/admin/events?gone=event");
   const eventId = ref.id;
   const eventSlug = ref.slug;
-  await requireRole("operator", `/admin/events/${eventSlug}/print`);
+  const session = await requireRole("operator", `/admin/events/${eventSlug}/print`);
+  const isSuper = session.role === "super_admin";
 
   const svc = createServiceClient();
   const { data: event } = await svc
@@ -142,10 +143,13 @@ export default async function PrintPage({
           </p>
           <p className="mt-1 font-mono text-[13px] text-ink/60">
             {(fixturesCount ?? 0).toLocaleString("en-IN")} match{(fixturesCount ?? 0) === 1 ? "" : "es"} currently
-            in the bracket. Rebuild after any weigh-in change.
+            in the bracket.{" "}
+            {isSuper
+              ? "Rebuild after any weigh-in change."
+              : "Ask a super admin to (re)generate after weigh-in changes."}
           </p>
         </div>
-        <GenerateButton eventId={eventId} />
+        {isSuper && <GenerateButton eventId={eventId} />}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">

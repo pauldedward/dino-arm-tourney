@@ -110,7 +110,7 @@ type Row = {
 
 function buildRows(refYear: number): Row[] {
   const rows: Row[] = [];
-  let chest = 200; // bulk chest numbers start at 201
+  let chest = 1000; // bulk chest numbers start at 1001
   for (const c of CLUSTERS) {
     for (let i = 0; i < c.count; i++) {
       chest += 1;
@@ -127,9 +127,9 @@ function buildRows(refYear: number): Row[] {
       const classCode = isYouth
         ? `${yDivCode}-${c.upperKg ?? "OPN"}`
         : `${divCode}-${c.upperKg ?? "OPN"}`;
-      const idx = chest - 200; // 1-based
+      const idx = chest - 1000; // 1-based
       rows.push({
-        id: `${ID_PREFIX}${String(chest).padStart(3, "0")}`,
+        id: `${ID_PREFIX}${String(chest).padStart(4, "0")}`,
         event_id: EVENT_ID,
         athlete_id: null,
         chest_no: chest,

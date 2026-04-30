@@ -32,7 +32,7 @@ export default async function CounterDeskPage({
   const svc = createServiceClient();
   const { data: event } = await svc
     .from("events")
-    .select("id, slug, name, starts_at, entry_fee_default_inr, entry_fee_offline_inr, payment_mode, upi_id")
+    .select("id, slug, name, starts_at, entry_fee_default_inr, entry_fee_offline_inr, entry_fee_para_inr, payment_mode, upi_id")
     .eq("id", ref.id)
     .maybeSingle();
   if (!event) redirect("/admin/events?gone=event");
@@ -44,9 +44,13 @@ export default async function CounterDeskPage({
 
   const onlineFee = event.entry_fee_default_inr ?? 0;
   const offlineFee = event.entry_fee_offline_inr ?? onlineFee;
-  const feesDiffer = onlineFee !== offlineFee;
-  const feeLabel = feesDiffer
-    ? `₹${offlineFee} desk · ₹${onlineFee} online`
+  const paraFee = event.entry_fee_para_inr ?? offlineFee;
+  const offlineDiffers = offlineFee !== onlineFee;
+  const paraDiffers = paraFee !== offlineFee;
+  const feeLabel = offlineDiffers || paraDiffers
+    ? `₹${offlineFee} desk · ₹${onlineFee} online${
+        paraDiffers ? ` · ₹${paraFee} para` : ""
+      }`
     : `₹${onlineFee}`;
 
   return (
@@ -86,6 +90,7 @@ export default async function CounterDeskPage({
         eventStartsAt={event.starts_at}
         defaultFee={onlineFee}
         offlineFee={offlineFee}
+        paraFee={paraFee}
         paymentMode={(event.payment_mode as "online_upi" | "offline" | "hybrid" | null) ?? "online_upi"}
         districts={TN_DISTRICTS}
         initialSaved={initialSaved}

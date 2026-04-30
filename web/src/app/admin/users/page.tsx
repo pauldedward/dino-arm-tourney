@@ -9,7 +9,12 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
-type Search = { page?: string; pageSize?: string; role?: string; q?: string };
+type Search = {
+  page?: string;
+  pageSize?: string;
+  role?: string;
+  q?: string;
+};
 
 export default async function UsersPage({
   searchParams,

@@ -11,6 +11,7 @@ import { FixturesSheet, type FixtureRow } from "@/lib/pdf/FixturesSheet";
 import { CashCollectionSheet, type CashDistrict } from "@/lib/pdf/CashCollectionSheet";
 import { PaymentReportSheet } from "@/lib/pdf/PaymentReportSheet";
 import { loadPaymentReport } from "@/lib/sheets/loaders";
+import { rollupByDistrict } from "@/lib/payments/district-rollup";
 import { buildNominalRows } from "@/lib/sheets/build-nominal";
 import { recordAudit } from "@/lib/audit";
 import { groupRegistrationsByCategory } from "@/lib/registrations/group-by-category";
@@ -405,8 +406,14 @@ async function buildDocument(
 
     case "payment-report": {
       const { rows, totals } = await loadPaymentReport(svc, event.id);
+      const districts = rollupByDistrict(rows);
       return (
-        <PaymentReportSheet event={{ name: event.name }} rows={rows} totals={totals} />
+        <PaymentReportSheet
+          event={{ name: event.name }}
+          rows={rows}
+          totals={totals}
+          districts={districts}
+        />
       );
     }
   }

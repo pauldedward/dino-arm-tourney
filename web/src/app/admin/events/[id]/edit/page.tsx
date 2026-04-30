@@ -72,6 +72,7 @@ export type EventRow = {
   description: string | null;
   entry_fee_default_inr: number | null;
   entry_fee_offline_inr: number | null;
+  entry_fee_para_inr: number | null;
   upi_id: string | null;
   upi_payee_name: string | null;
   payment_mode: "online_upi" | "offline" | "hybrid" | null;

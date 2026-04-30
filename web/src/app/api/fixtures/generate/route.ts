@@ -20,7 +20,11 @@ export const runtime = "nodejs";
  * fixtures even if they paid.
  */
 export async function POST(req: NextRequest) {
-  const session = await requireRole("operator", "/admin");
+  // Generating fixtures rewrites the entire bracket — restrict to
+  // super_admin so a regular operator cannot accidentally wipe the
+  // running tournament. Matches the UI which only renders the button
+  // for super admins.
+  const session = await requireRole("super_admin", "/admin");
 
   const body = (await req.json().catch(() => ({}))) as { event_id?: string };
   const eventId = body.event_id;

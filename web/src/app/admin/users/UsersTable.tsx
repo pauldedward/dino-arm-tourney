@@ -203,6 +203,40 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
     popFlash(disable ? "disabled" : "re-enabled");
   }
 
+  async function eraseSingle(id: string) {
+    if (id === meId) {
+      setErr("can't erase self");
+      return;
+    }
+    const u = users.find((x) => x.id === id);
+    const label = u?.full_name || u?.email || id.slice(0, 8);
+    const ok = await confirmDialog({
+      message:
+        `Permanently delete ${label}? Their account and all PII (name, email, phone, Aadhaar, photos) are removed. ` +
+        `Tournament history (registrations, fixtures, audit trail) is preserved with the name shown as "Deleted athlete" / "Deleted user". This cannot be undone.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    setErr(null);
+    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setErr(j.error ?? "erase failed");
+      return;
+    }
+    setUsers((prev) => prev.filter((row) => row.id !== id));
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    popFlash(`deleted (${j.registrations_anonymized ?? 0} reg, ${j.r2_objects_purged ?? 0} files)`);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3 border-2 border-ink p-3">
@@ -365,26 +399,38 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
                   )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {u.id !== meId &&
-                    (u.disabled_at ? (
+                  {u.id !== meId && (
+                    <div className="flex justify-end gap-1">
+                      {u.disabled_at ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => toggleDisabledSingle(u.id, false)}
+                          className="border border-ink px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-ink hover:text-bone"
+                        >
+                          Re-enable
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => toggleDisabledSingle(u.id, true)}
+                          className="border border-rust px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
+                        >
+                          Disable
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => toggleDisabledSingle(u.id, false)}
-                        className="border border-ink px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-ink hover:text-bone"
+                        onClick={() => eraseSingle(u.id)}
+                        title="Permanently delete this user (GDPR/DPDP)"
+                        className="border border-ink bg-ink/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink/80 hover:bg-ink hover:text-bone"
                       >
-                        Re-enable
+                        Delete
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => toggleDisabledSingle(u.id, true)}
-                        className="border border-rust px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-rust hover:bg-rust hover:text-white"
-                      >
-                        Disable
-                      </button>
-                    ))}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

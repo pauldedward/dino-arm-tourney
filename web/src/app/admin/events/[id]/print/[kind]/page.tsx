@@ -53,13 +53,13 @@ const SHEETS = {
   },
   "payment-report": {
     title: "Payment Report",
-    blurb: "Athlete payment status with paid/due totals — PDF + XLSX from the same source.",
+    blurb: "Accounting view — district summary + per-athlete paid/due. Smart XLSX recomputes totals and % collected as you edit.",
   },
   fixtures: { title: "Fixtures", blurb: "Bracket trees per category." },
   "cash-sheet": {
-    title: "Cash Collection (per district)",
+    title: "Cash Collection Forms",
     blurb:
-      "Cover totals + one A4 per district with athlete, fee and signature column. Hand to the District Convener for offline cash events.",
+      "Cover totals + one A4 per district with athlete, fee and a blank signature column. Hand to the District Convener to tick off and sign as cash is collected.",
   },
 } as const;
 type Kind = keyof typeof SHEETS;
@@ -925,7 +925,14 @@ async function PaymentReportPreview({
   const districts =
     (dash as { districts?: DistrictTotal[] } | null)?.districts ?? [];
   const filtered = rows.filter((r) =>
-    matchQ(q, r.full_name, r.chest_no, r.team_or_district, r.category)
+    matchQ(
+      q,
+      r.full_name,
+      r.chest_no,
+      r.team_or_district,
+      r.age_categories,
+      r.weight_classes.join(", ")
+    )
   );
   const total = filtered.length;
   const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -938,24 +945,44 @@ async function PaymentReportPreview({
           "en-IN"
         )} due${totals.total_waived ? ` · ₹${totals.total_waived.toLocaleString("en-IN")} waived (${totals.waived_n})` : ""}`}
       />
-      <div className="grid gap-2 md:grid-cols-5">
-        <SummaryCard label="Athletes" value={String(totals.total_athletes)} />
+      <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
+        <SummaryCard
+          label="Athletes"
+          value={String(totals.total_athletes)}
+        />
+        <SummaryCard
+          label="Billable"
+          value={`₹${totals.total_billable.toLocaleString("en-IN")}`}
+          sub="Total fees owed (rejected excluded)"
+        />
         <SummaryCard
           label="Received"
           value={`₹${totals.total_received.toLocaleString("en-IN")}`}
+          sub="Real money in (cash / UPI / Razorpay)"
           tone="paid"
         />
         <SummaryCard
           label={`Waived${totals.waived_n ? ` (${totals.waived_n})` : ""}`}
           value={`₹${totals.total_waived.toLocaleString("en-IN")}`}
+          sub="Concessions; not money in hand"
         />
         <SummaryCard
           label="Due"
           value={`₹${totals.total_due.toLocaleString("en-IN")}`}
+          sub="Outstanding on pending payments"
           tone="due"
         />
-        <SummaryCard label="% Collected" value={`${Math.round(totals.percent_paid)}%`} />
+        <SummaryCard
+          label="% Collected"
+          value={`${Math.round(totals.percent_paid)}%`}
+          sub="Received ÷ (Billable − Waived)"
+        />
       </div>
+      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink/50">
+        Billable = Received + Waived + Due. Effective = Billable − Waived
+        ={" "}
+        ₹{totals.total_effective.toLocaleString("en-IN")}.
+      </p>
       {districts.length > 0 && (
         <DistrictSummary eventSlug={eventSlug} totals={districts} />
       )}
@@ -974,7 +1001,7 @@ async function PaymentReportPreview({
               <Th>Chest</Th>
               <Th>Athlete</Th>
               <Th>Team / District</Th>
-              <Th>Category</Th>
+              <Th>Category / Weight</Th>
               <Th className="text-right">Total (₹)</Th>
               <Th className="text-right">Recv (₹)</Th>
               <Th className="text-right">Waived (₹)</Th>
@@ -988,7 +1015,12 @@ async function PaymentReportPreview({
                 <Td>{r.chest_no ?? "—"}</Td>
                 <Td className="font-semibold">{r.full_name}</Td>
                 <Td>{r.team_or_district ?? "—"}</Td>
-                <Td>{r.category ?? "—"}</Td>
+                <Td>
+                  <div>{r.age_categories || "—"}</div>
+                  {r.weight_classes.length > 0 && (
+                    <div className="text-ink/60">{r.weight_classes.join(", ")}</div>
+                  )}
+                </Td>
                 <Td className="text-right">
                   {r.total_inr ? r.total_inr.toLocaleString("en-IN") : "—"}
                 </Td>
@@ -1164,10 +1196,12 @@ async function CashSheetPreview({
 function SummaryCard({
   label,
   value,
+  sub,
   tone,
 }: {
   label: string;
   value: string;
+  sub?: string;
   tone?: "paid" | "due";
 }) {
   const toneCls =
@@ -1182,6 +1216,11 @@ function SummaryCard({
         {label}
       </p>
       <p className="mt-1 font-display text-3xl font-black">{value}</p>
+      {sub && (
+        <p className="mt-1 font-mono text-[10px] leading-tight text-ink/55">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }

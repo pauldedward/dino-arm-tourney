@@ -13,14 +13,14 @@ import { buildOverrideRows } from "@/lib/rules/weight-overrides";
  */
 export type ClassesCellRow = {
   declared_weight_kg: number | null;
-  weight_class_code: string | null;
-  gender: string | null;
-  nonpara_classes: string[] | null;
-  nonpara_hands: Array<string | null> | null;
-  nonpara_hand: string | null;
-  para_codes: string[] | null;
-  para_hand: string | null;
-  weight_overrides: WeightOverride[] | null;
+  weight_class_code?: string | null;
+  gender?: string | null;
+  nonpara_classes?: string[] | null;
+  nonpara_hands?: Array<string | null> | null;
+  nonpara_hand?: string | null;
+  para_codes?: string[] | null;
+  para_hand?: string | null;
+  weight_overrides?: WeightOverride[] | null;
 };
 
 export function handLabel(h: string | null | undefined): string {

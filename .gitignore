@@ -49,6 +49,9 @@ venv/
 *.xlsx
 *.xls
 *.zip
+# Next.js route segments that legitimately end in .zip (URL extension, not a real archive)
+!web/src/app/api/**/*.zip/
+!web/src/app/api/**/*.zip/**
 non para/
 research/populate-out/
 research/rehearsal-out/

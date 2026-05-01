@@ -126,7 +126,15 @@ create table if not exists public.events (
     id_card_event_title_size    smallint,
     bracket_format              text not null default 'double_elim',
     entry_fee_offline_inr       integer,
-    entry_fee_para_inr          integer
+    entry_fee_para_inr          integer,
+    -- Per-event Challonge integration (migration 0045). When enabled,
+    -- /admin/events/:id/categories pushes one Challonge tournament per
+    -- category under the configured Premier subdomain. The api_key is
+    -- write-only from the UI and never returned to the client.
+    challonge_enabled           boolean not null default false,
+    challonge_api_key           text,
+    challonge_username          text,
+    challonge_subdomain         text
 );
 
 -- athletes --------------------------------------------------------------------

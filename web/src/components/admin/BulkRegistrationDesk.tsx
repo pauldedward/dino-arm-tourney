@@ -68,6 +68,10 @@ export interface SavedRow {
   // Snapshot of the POST body so we can retry on error without
   // re-typing the whole form.
   payload?: Record<string, unknown>;
+  /** When set, retries should target the PATCH endpoint for this id
+   *  rather than the create POST. Tracks edits in flight so a queued
+   *  edit doesn't get replayed as a duplicate insert. */
+  edit_target_id?: string;
 }
 
 type DraftMode = "nonpara" | "para";
@@ -736,7 +740,11 @@ export default function BulkRegistrationDesk({
     async (
       clientId: string,
       body: Record<string, unknown>,
-      pending?: PendingUpload
+      pending?: PendingUpload,
+      /** When set, the server route is the PATCH bulk-row for this
+       *  registration id (in-place edit). Otherwise the row is POSTed
+       *  to the create endpoint. */
+      editTargetId?: string,
     ) => {
       let merged = body;
       if (pending && (pending.photo || pending.proof)) {
@@ -761,9 +769,18 @@ export default function BulkRegistrationDesk({
           );
         }
       }
+      // Edit (PATCH) vs create (POST) — same body shape, different
+      // URL+verb. Crucially the PATCH route updates the existing
+      // registration / profile / athlete rows in place; using POST for
+      // an edit would orphan the original athlete (auth.users +
+      // profiles + athletes) every time.
+      const url = editTargetId
+        ? `/api/admin/registrations/${editTargetId}/bulk-row`
+        : `/api/admin/registrations/bulk-row`;
+      const method = editTargetId ? "PATCH" : "POST";
       try {
-        const res = await fetch("/api/admin/registrations/bulk-row", {
-          method: "POST",
+        const res = await fetch(url, {
+          method,
           headers: { "content-type": "application/json" },
           body: JSON.stringify(merged),
         });
@@ -771,11 +788,7 @@ export default function BulkRegistrationDesk({
         // background flush — instead of holding the operator hostage to
         // their flaky WAN, treat the row as queued so they can move on.
         if (!res.ok && (res.status >= 500 || res.status === 401)) {
-          await enqueueJson(
-            "/api/admin/registrations/bulk-row",
-            "POST",
-            merged,
-          );
+          await enqueueJson(url, method, merged);
           void flushQueue();
           setSaved((rs) =>
             rs.map((r) =>
@@ -797,6 +810,12 @@ export default function BulkRegistrationDesk({
                   chest_no: data.chest_no ?? r.chest_no,
                   status: "saved",
                   error: undefined,
+                  // Clear the edit-target flag once the PATCH lands so a
+                  // subsequent retry of THIS row (e.g. operator hits Save
+                  // on it again later without re-entering edit mode)
+                  // doesn't keep PATCHing forever. The next edit pass
+                  // will set it again.
+                  edit_target_id: undefined,
                   // Keep payload so the row can be edited again.
                 }
               : r
@@ -808,11 +827,7 @@ export default function BulkRegistrationDesk({
         // to enqueue. The IDB write is local; if even THAT fails (e.g.
         // QuotaExceeded) fall back to the in-memory error+retry path.
         try {
-          await enqueueJson(
-            "/api/admin/registrations/bulk-row",
-            "POST",
-            merged,
-          );
+          await enqueueJson(url, method, merged);
           void flushQueue();
           setSaved((rs) =>
             rs.map((r) =>
@@ -848,7 +863,14 @@ export default function BulkRegistrationDesk({
         )
       );
       const row = savedRef.current.find((r) => r.client_id === clientId);
-      if (row?.payload) void submitRow(clientId, row.payload);
+      if (row?.payload) {
+        void submitRow(
+          clientId,
+          row.payload,
+          undefined,
+          row.edit_target_id,
+        );
+      }
     },
     [submitRow]
   );
@@ -1290,48 +1312,36 @@ export default function BulkRegistrationDesk({
     newDraftId();
 
     if (editingClientId) {
-      // ── Edit mode: replace the row in place + delete the old server row.
+      // ── Edit mode: PATCH the existing registration in place. ─────────
+      // We deliberately do NOT do DELETE+POST here: the create POST
+      // mints a fresh synthetic auth.users / profiles / athletes chain
+      // every call, so each edit would leak orphan rows and reassign
+      // the registration's athlete_id. PATCH /[id]/bulk-row updates
+      // the existing rows in place, preserving athlete_id.
       const prev = savedRef.current.find(
         (r) => r.client_id === editingClientId
       );
       // Re-use the same client_id so the row stays in the same slot.
       optimistic.client_id = editingClientId;
       optimistic.id = prev?.id ?? editingClientId;
+      // Carry the registration id forward so retries (and queued
+      // replays after a WAN blip) keep PATCHing the same row instead
+      // of falling back to a duplicate POST.
+      const editTargetId = prev?.id ?? null;
+      if (editTargetId) optimistic.edit_target_id = editTargetId;
       setSaved((rs) =>
         rs.map((r) => (r.client_id === editingClientId ? optimistic : r))
       );
-      // Background DELETE of the old server row (if any), then POST new.
-      // Use the offline queue so a flaky WAN doesn't leave the DELETE
-      // un-replayed (otherwise the operator sees two rows after sync).
-      if (prev && prev.id && prev.status === "saved") {
-        const oldId = prev.id;
-        void fetch(`/api/admin/registrations/${oldId}`, { method: "DELETE" })
-          .then(async (res) => {
-            if (!res.ok && res.status !== 404) {
-              await enqueueJson(
-                `/api/admin/registrations/${oldId}`,
-                "DELETE",
-                null,
-              );
-              void flushQueue();
-            }
-          })
-          .catch(async () => {
-            try {
-              await enqueueJson(
-                `/api/admin/registrations/${oldId}`,
-                "DELETE",
-                null,
-              );
-              void flushQueue();
-            } catch {
-              // IDB unavailable — best effort; the new POST still goes
-              // through and the operator can clean up the duplicate later.
-            }
-          });
-      }
       setEditingClientId(null);
-      void submitRow(editingClientId, body, pending);
+      // If the row was never persisted server-side (still optimistic /
+      // queued / errored from the original create), there's nothing to
+      // PATCH yet — fall back to the create POST.
+      void submitRow(
+        editingClientId,
+        body,
+        pending,
+        editTargetId ?? undefined,
+      );
     } else {
       setSaved((rs) => [optimistic, ...rs]);
       void submitRow(clientId, body, pending);

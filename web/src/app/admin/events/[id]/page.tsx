@@ -152,6 +152,17 @@ export default async function EventDetail({
           desc="Search every entry, verify payments, view photos & proofs."
         />
         <QuickLink href={`/admin/events/${event.slug}/weighin`} title="Weigh-in" desc="Capture measured weight + live photo." />
+        {event.challonge_enabled ? (
+          <QuickLink
+            href={`/admin/events/${event.slug}/categories`}
+            title="Challonge"
+            desc={
+              isSuper
+                ? "Push / replace / delete brackets on Challonge per category."
+                : "View categories and jump into Challonge to manage each bracket."
+            }
+          />
+        ) : null}
         <QuickLink href={`/admin/events/${event.slug}/print`} title="Print & Fixtures" desc="Nominal, category, ID cards. Generate brackets, print fixtures." />
         <QuickLink href={`/admin/events/${event.slug}/run`} title="Run fixtures" desc="Match-day console. Mark winners, auto-advance brackets." />
         <QuickLink href={`/admin/events/${event.slug}/standings`} title="Standings" desc="Medals by category, district medal table." />

@@ -45,6 +45,11 @@ const PATCHABLE = new Set([
   "id_card_footer",
   "id_card_signatory_name",
   "id_card_signatory_title",
+  // Challonge integration
+  "challonge_enabled",
+  "challonge_username",
+  "challonge_subdomain",
+  "challonge_api_key",
 ]);
 
 export async function PATCH(
@@ -77,6 +82,20 @@ export async function PATCH(
         );
       }
       patch[k] = Math.round(n);
+      continue;
+    }
+    // Challonge integration: trim strings, blank → null; coerce enabled.
+    if (k === "challonge_enabled") {
+      patch[k] = !!v;
+      continue;
+    }
+    if (k === "challonge_username" || k === "challonge_subdomain" || k === "challonge_api_key") {
+      if (v == null) {
+        patch[k] = null;
+        continue;
+      }
+      const s = String(v).trim();
+      patch[k] = s === "" ? null : s;
       continue;
     }
     patch[k] = v;

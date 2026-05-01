@@ -16,7 +16,7 @@ import {
   formatCategoryListForDisplay,
   parseCategoryCode,
 } from "@/lib/rules/category-label";
-import { wafCategory, type WafCategory } from "@/lib/rules/waf-2025";
+import { WAF_ALL, wafCategory, type WafCategory } from "@/lib/rules/waf-2025";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -267,51 +267,59 @@ async function buildCategory(
 ) {
   const cats = await loadCategory(svc, eventId);
 
-  // Bucket every category into one of the 8 sub-sheets, falling back to
-  // a synthetic "Other" sheet only if a code cannot be parsed (defensive
-  // — should not happen for properly-coded entries).
-  const buckets = new Map<string, SortedCategoryEntry[]>();
-  for (const layout of CATEGORY_SHEET_LAYOUT) buckets.set(layout.sheetKey, []);
-  const orphans: SortedCategoryEntry[] = [];
+  // Index loaded athletes by their canonical category code so we can
+  // attach them to the pre-enumerated WAF grid below. Any code we can't
+  // attach falls through to the "Other" sheet at the end.
+  const athletesByCode = new Map<string, (typeof cats)[number]["athletes"]>();
+  for (const c of cats) athletesByCode.set(c.category_code, c.athletes);
 
-  for (const c of cats) {
-    if (c.athletes.length === 0) continue;
-    const parts = parseCategoryCode(c.category_code);
-    const waf = parts ? wafCategory(parts.classCode) : undefined;
-    if (!parts || !waf) {
-      orphans.push({
-        category_code: c.category_code,
-        cat: {
-          code: parts?.classCode ?? c.category_code,
-          className: "",
-          classFull: "",
-          gender: "M",
-          minAge: 0,
-          maxAge: null,
-          isPara: false,
-          posture: "Standing",
-          buckets: [],
-        },
-        bucketIdx: 0,
-        athletes: c.athletes,
-      });
-      continue;
-    }
-    const bucketIdx = waf.buckets.findIndex(
-      (b) => b.code === c.category_code.slice(0, c.category_code.lastIndexOf("-"))
-        || b.label === parts.weight,
+  // Pre-populate every sub-sheet with the full WAF grid (class × weight
+  // bucket × hand) for that gender + para flag, so the operator can see
+  // a header row for every category — including ones with zero eligible
+  // athletes. Empty categories are an explicit signal, not noise.
+  const buckets = new Map<string, SortedCategoryEntry[]>();
+  for (const layout of CATEGORY_SHEET_LAYOUT) {
+    const list: SortedCategoryEntry[] = [];
+    const matching = WAF_ALL.filter(
+      (w) => w.gender === layout.gender && w.isPara === layout.isPara,
     );
-    const key = `${waf.gender}-${parts.hand}-${waf.isPara ? "para" : "able"}`;
-    const target = buckets.get(key);
-    if (!target) {
-      orphans.push({ category_code: c.category_code, cat: waf, bucketIdx, athletes: c.athletes });
-      continue;
+    for (const waf of matching) {
+      for (let bi = 0; bi < waf.buckets.length; bi++) {
+        const b = waf.buckets[bi]!;
+        const code = `${waf.code}-${b.label}-${layout.hand}`;
+        list.push({
+          category_code: code,
+          cat: waf,
+          bucketIdx: bi,
+          athletes: athletesByCode.get(code) ?? [],
+        });
+        athletesByCode.delete(code);
+      }
     }
-    target.push({
-      category_code: c.category_code,
-      cat: waf,
-      bucketIdx: bucketIdx >= 0 ? bucketIdx : 999,
-      athletes: c.athletes,
+    buckets.set(layout.sheetKey, list);
+  }
+
+  // Anything still in athletesByCode didn't match a WAF cell — keep it
+  // visible on a synthetic "Other" sheet so the operator notices.
+  const orphans: SortedCategoryEntry[] = [];
+  for (const [code, athletes] of athletesByCode) {
+    const parts = parseCategoryCode(code);
+    const waf = parts ? wafCategory(parts.classCode) : undefined;
+    orphans.push({
+      category_code: code,
+      cat: waf ?? {
+        code: parts?.classCode ?? code,
+        className: "",
+        classFull: "",
+        gender: "M",
+        minAge: 0,
+        maxAge: null,
+        isPara: false,
+        posture: "Standing",
+        buckets: [],
+      },
+      bucketIdx: 0,
+      athletes,
     });
   }
 

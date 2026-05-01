@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 interface User {
@@ -26,6 +27,7 @@ const ROLES = ["super_admin", "operator", "athlete"] as const;
  */
 export default function UsersTable({ users: initial, meId }: { users: User[]; meId: string }) {
   const confirmDialog = useConfirm();
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>(initial);
   // Re-sync when the server sends a new page (URL pagination). Selection
   // and filter survive across navigations.
@@ -203,6 +205,58 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
     popFlash(disable ? "disabled" : "re-enabled");
   }
 
+  async function bulkErase() {
+    const ids = [...selected].filter((id) => id !== meId);
+    if (ids.length === 0) return;
+    const ok = await confirmDialog({
+      message:
+        `Permanently delete ${ids.length} user(s)? Their accounts and all PII (name, email, phone, Aadhaar, photos) are removed. ` +
+        `Tournament history (registrations, fixtures, audit trail) is preserved with the name shown as "Deleted athlete" / "Deleted user". This cannot be undone.`,
+      confirmLabel: `Delete ${ids.length}`,
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    setErr(null);
+    let okCount = 0;
+    let failCount = 0;
+    let firstErr: string | null = null;
+    let regsTotal = 0;
+    let r2Total = 0;
+    const deleted = new Set<string>();
+    // Sequential — each call also runs a server-side sweep of up to 5
+    // stuck erasures, so parallelism would just contend on the same rows.
+    for (const id of ids) {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        okCount++;
+        deleted.add(id);
+        regsTotal += Number(j.registrations_anonymized ?? 0);
+        r2Total += Number(j.r2_objects_purged ?? 0);
+      } else {
+        failCount++;
+        if (!firstErr) firstErr = j.error ?? `failed (${res.status})`;
+      }
+    }
+    setBusy(false);
+    if (deleted.size > 0) {
+      setUsers((prev) => prev.filter((row) => !deleted.has(row.id)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of deleted) next.delete(id);
+        return next;
+      });
+    }
+    if (failCount > 0) {
+      setErr(`${failCount} of ${ids.length} failed${firstErr ? `: ${firstErr}` : ""}`);
+    }
+    if (okCount > 0) {
+      popFlash(`${okCount} deleted (${regsTotal} reg, ${r2Total} files)`);
+      router.refresh();
+    }
+  }
+
   async function eraseSingle(id: string) {
     if (id === meId) {
       setErr("can't erase self");
@@ -235,6 +289,7 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
       return next;
     });
     popFlash(`deleted (${j.registrations_anonymized ?? 0} reg, ${j.r2_objects_purged ?? 0} files)`);
+    router.refresh();
   }
 
   return (
@@ -291,6 +346,15 @@ export default function UsersTable({ users: initial, meId }: { users: User[]; me
             className="border-2 border-moss px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-moss disabled:opacity-40"
           >
             Re-enable
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={bulkErase}
+            title="Permanently delete selected users (GDPR/DPDP)"
+            className="border-2 border-rust bg-rust px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-white disabled:opacity-40"
+          >
+            Delete
           </button>
           <button
             type="button"

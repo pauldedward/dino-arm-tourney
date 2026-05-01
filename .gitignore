@@ -55,6 +55,11 @@ venv/
 non para/
 research/populate-out/
 research/rehearsal-out/
+research/_local/
+
+# Local-only / scratch scripts (one-offs, smoke tests, throwaway tools).
+# Anything inside web/scripts/local/ is intentionally untracked.
+web/scripts/local/
 
 # Ad-hoc screenshots / scratch files at repo root
 /*.png

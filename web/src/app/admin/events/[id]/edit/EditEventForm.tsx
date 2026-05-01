@@ -11,6 +11,7 @@ const SECTIONS = [
   "Payment",
   "Files",
   "Branding",
+  "Challonge",
   "Operators",
 ] as const;
 type Section = (typeof SECTIONS)[number];
@@ -50,6 +51,7 @@ export default function EditEventForm({
         {section === "Payment" && <PaymentSection event={event} onSaved={() => router.refresh()} />}
         {section === "Files" && <FilesSection event={event} onSaved={() => router.refresh()} />}
         {section === "Branding" && <BrandingSection event={event} onSaved={() => router.refresh()} />}
+        {section === "Challonge" && <ChallongeSection event={event} onSaved={() => router.refresh()} />}
         {section === "Operators" && <OperatorsSection operators={operators} onChanged={() => router.refresh()} />}
       </div>
     </div>
@@ -856,5 +858,195 @@ function ModeCard({
         {desc}
       </p>
     </button>
+  );
+}
+
+// ─── Challonge ─────────────────────────────────────────────────────────────
+
+function ChallongeSection({ event, onSaved }: { event: EventRow; onSaved: () => void }) {
+  const askConfirm = useConfirm();
+  const [enabled, setEnabled] = useState(!!event.challonge_enabled);
+  const [username, setUsername] = useState(event.challonge_username ?? "");
+  const [subdomain, setSubdomain] = useState(event.challonge_subdomain ?? "");
+  // We never re-display an existing API key. The UI shows a "key set" badge
+  // and an empty input. Submitting an empty input by itself does NOT clear
+  // the stored key; the user must press "Remove key" explicitly.
+  const hadKey = !!event.challonge_api_key && event.challonge_api_key.length > 0;
+  const [apiKey, setApiKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const patch: Record<string, unknown> = {
+        challonge_enabled: enabled,
+        challonge_username: username.trim() || null,
+        challonge_subdomain: subdomain.trim() || null,
+      };
+      // Only include api_key when the user typed something new.
+      if (apiKey.trim().length > 0) patch.challonge_api_key = apiKey.trim();
+      await patchEvent(event.id, patch);
+      setApiKey("");
+      setSavedAt(Date.now());
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeKey() {
+    if (!hadKey) return;
+    if (
+      !(await askConfirm({
+        message: "Remove the saved Challonge API key for this event? Pushes will fall back to the CHALLONGE_API_KEY env var if set, otherwise fail.",
+        confirmLabel: "Remove key",
+        tone: "danger",
+      }))
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      await patchEvent(event.id, { challonge_api_key: null });
+      setSavedAt(Date.now());
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="font-display text-xl font-black">Challonge integration</h2>
+        <p className="mt-1 font-mono text-[11px] text-ink/60">
+          When enabled, you can push this event&apos;s categories to Challonge as separate
+          double-elimination tournaments. Each category becomes one tournament. Premier subdomain
+          required for grouping.
+        </p>
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-3 border-2 border-ink p-3">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-5 w-5"
+        />
+        <div>
+          <p className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
+            Enable Challonge integration
+          </p>
+          <p className="font-mono text-[11px] text-ink/60">
+            Unlocks the push/replace/delete buttons on the Categories page.
+          </p>
+        </div>
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/70">
+            Challonge username
+          </span>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="armwrestling_tn"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
+          />
+          <span className="mt-1 block font-mono text-[10px] text-ink/50">
+            Falls back to CHALLONGE_USERNAME env var when blank.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/70">
+            Subdomain (Premier)
+          </span>
+          <input
+            type="text"
+            value={subdomain}
+            onChange={(e) => setSubdomain(e.target.value)}
+            placeholder="tn-arm-2026"
+            className="mt-1 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
+          />
+          <span className="mt-1 block font-mono text-[10px] text-ink/50">
+            Tournaments live at https://&lt;subdomain&gt;.challonge.com/. Leave blank to push to
+            the bare account.
+          </span>
+        </label>
+      </div>
+
+      <div className="border-2 border-ink p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/70">
+              API key
+            </p>
+            <p className="font-mono text-[11px] text-ink/60">
+              {hadKey ? (
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-green-600" />
+                  Saved on this event. Type below to replace it; field is write-only.
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-ink/40" />
+                  No event-specific key — falls back to CHALLONGE_API_KEY env var.
+                </span>
+              )}
+            </p>
+          </div>
+          {hadKey && (
+            <button
+              type="button"
+              onClick={removeKey}
+              disabled={busy}
+              className="border-2 border-ink px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              Remove key
+            </button>
+          )}
+        </div>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder={hadKey ? "(unchanged — type to replace)" : "paste new key"}
+          autoComplete="new-password"
+          className="mt-2 block w-full border-2 border-ink bg-bone px-3 py-2 font-mono text-sm"
+        />
+      </div>
+
+      {error && (
+        <p className="border-2 border-red-700 bg-red-50 px-3 py-2 font-mono text-xs text-red-800">
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="border-2 border-ink bg-ink px-4 py-2 font-mono text-xs uppercase tracking-wide text-bone hover:bg-bone hover:text-ink disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {savedAt && (
+          <span className="font-mono text-[11px] text-green-700">
+            Saved · {new Date(savedAt).toLocaleTimeString()}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

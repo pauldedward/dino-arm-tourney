@@ -107,6 +107,18 @@ export function formatCategoryCode(code: string): string {
 }
 
 /**
+ * Compact dot-free form used for Challonge tournament names and the
+ * Challonge admin panel. Same parts as `formatCategoryCode` but joined
+ * with single spaces and the short arm letter (R/L) instead of
+ * Right/Left. Example: "Para PID Sit Men +100 kg R".
+ */
+export function formatCategoryCodeShort(code: string): string {
+  const p = parseCategoryCode(code);
+  if (!p) return code;
+  return `${p.classLabel} ${p.weight} ${p.hand}`;
+}
+
+/**
  * Strip the trailing age number that the WAF roster uses to disambiguate
  * the youth bands ("Sub-Junior 15", "Junior 18", "Youth 23"). Returns
  * the visible class WITHOUT the number — e.g. "Junior 18" → "Junior",

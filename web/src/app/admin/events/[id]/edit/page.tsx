@@ -90,6 +90,10 @@ export type EventRow = {
   id_card_footer: string | null;
   id_card_signatory_name: string | null;
   id_card_signatory_title: string | null;
+  challonge_enabled: boolean | null;
+  challonge_username: string | null;
+  challonge_subdomain: string | null;
+  challonge_api_key: string | null;
 };
 
 export type OperatorRow = {

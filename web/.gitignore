@@ -7,3 +7,6 @@ out
 public/cached
 *.log
 .DS_Store
+
+# TypeScript incremental build cache
+*.tsbuildinfo

@@ -1,9 +1,9 @@
 /**
  * Resolver: (registration v2 + latest weigh-in) -> zero or more `Entry` rows.
  *
- * One registration can fan out across both non-para and para tracks. For
- * non-para, hand "B" expands to two entries (R + L). Para is single-arm,
- * so "B" picks R deterministically.
+ * One registration can fan out across both non-para and para tracks.
+ * Hand "B" expands to two entries (R + L) for both non-para and para —
+ * an athlete who registers Both Hands competes in both arm brackets.
  *
  * Operator weight overrides (`weight_overrides`) let an athlete compete in
  * a heavier bucket than auto. Overrides are keyed by (scope, WAF code,
@@ -87,9 +87,10 @@ export function resolveEntries(
     const cat = WAF_PARA.find((c) => c.code === code);
     if (!cat) continue;
     const auto = wafBucketForWeight(cat, weightKg);
-    const hand: "R" | "L" = reg.para_hand === "L" ? "L" : "R";
-    const picked = pickBucket(cat, auto, overrides, "para", hand);
-    out.push(makeEntry(reg, cat, picked.bucket, hand, picked.competingUp));
+    for (const hand of expandHand(reg.para_hand)) {
+      const picked = pickBucket(cat, auto, overrides, "para", hand);
+      out.push(makeEntry(reg, cat, picked.bucket, hand, picked.competingUp));
+    }
   }
 
   return out;

@@ -29,7 +29,7 @@ describe("resolveEntries", () => {
     assert.deepEqual(out.map((e) => e.hand).sort(), ["L", "R"]);
   });
 
-  it("para single-arm: hand B picks R deterministically", () => {
+  it("para hand B expands to both R and L entries", () => {
     const out = resolveEntries(
       {
         ...baseReg,
@@ -40,10 +40,13 @@ describe("resolveEntries", () => {
       },
       null
     );
-    assert.equal(out.length, 1);
-    assert.equal(out[0].hand, "R");
-    assert.equal(out[0].division, "Para Men");
-    assert.equal(out[0].age_band, "U");
+    assert.equal(out.length, 2);
+    const hands = out.map((e) => e.hand).sort();
+    assert.deepEqual(hands, ["L", "R"]);
+    for (const e of out) {
+      assert.equal(e.division, "Para Men");
+      assert.equal(e.age_band, "U");
+    }
   });
 
   it("dual-track athlete produces entries in both Men and Para Men", () => {

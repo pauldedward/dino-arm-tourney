@@ -35,8 +35,8 @@ export type OverrideRow = {
 
 /**
  * Compute one OverrideRow per resolved entry on this registration at
- * the given weight. `B` hand on non-para fans into R + L. Returns [] if
- * the weight is invalid or the registration has no classes.
+ * the given weight. `B` hand fans into R + L for both non-para and para.
+ * Returns [] if the weight is invalid or the registration has no classes.
  */
 export function buildOverrideRows(
   reg: {
@@ -70,8 +70,16 @@ export function buildOverrideRows(
   for (const code of reg.para_codes ?? []) {
     const cat = WAF_PARA.find((c) => c.code === code);
     if (!cat) continue;
-    const hand: "R" | "L" = reg.para_hand === "L" ? "L" : "R";
-    rows.push(buildRow(cat, "para", hand, weightKg, overrides));
+    const handRaw = reg.para_hand;
+    const hands =
+      handRaw === "B"
+        ? (["R", "L"] as const)
+        : handRaw
+        ? ([handRaw] as ("R" | "L")[])
+        : [];
+    for (const hand of hands) {
+      rows.push(buildRow(cat, "para", hand, weightKg, overrides));
+    }
   }
   return rows;
 }

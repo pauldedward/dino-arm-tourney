@@ -729,6 +729,29 @@ begin
 end;
 $$;
 
+-- ── Triggers ───────────────────────────────────────────────────────────
+-- Bind the trigger functions above to their tables. (Forgotten in the
+-- 2026-04-30 baseline rewrite; restored by migration 0046.)
+drop trigger if exists registrations_assign_chest_no on registrations;
+create trigger registrations_assign_chest_no
+  before insert on registrations
+  for each row execute function assign_chest_no();
+
+drop trigger if exists weigh_ins_mark_checkin on weigh_ins;
+create trigger weigh_ins_mark_checkin
+  after insert on weigh_ins
+  for each row execute function registrations_mark_weighed_in();
+
+drop trigger if exists event_log_no_update on event_log;
+create trigger event_log_no_update
+  before update on event_log
+  for each row execute function event_log_immutable();
+
+drop trigger if exists event_log_no_delete on event_log;
+create trigger event_log_no_delete
+  before delete on event_log
+  for each row execute function event_log_immutable();
+
 create or replace function public.fill_next_slot(
   p_next_id uuid, p_source_match integer, p_entry_id uuid,
   p_actor uuid, p_now timestamptz
